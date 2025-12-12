@@ -72,11 +72,58 @@
         100% { opacity: 0; transform: translate(-50%, -20px); }
       }
 
+      /* Weapon Animations */
+      @keyframes swing-sword {
+        0% { transform: rotate(0deg) translateX(0); }
+        20% { transform: rotate(-45deg) translateX(-2px); }
+        60% { transform: rotate(100deg) translateX(4px); }
+        80% { transform: rotate(80deg) translateX(2px); }
+        100% { transform: rotate(0deg) translateX(0); }
+      }
+      @keyframes swing-axe {
+        0% { transform: rotate(0deg) translateY(0); }
+        30% { transform: rotate(-60deg) translateY(-4px); }
+        60% { transform: rotate(120deg) translateY(6px); }
+        100% { transform: rotate(0deg) translateY(0); }
+      }
+      @keyframes thrust-spear {
+        0% { transform: translateX(0) translateY(0); }
+        20% { transform: translateX(-2px) translateY(0); }
+        50% { transform: translateX(12px) translateY(-2px); }
+        100% { transform: translateX(0) translateY(0); }
+      }
+      @keyframes bash-mace {
+        0% { transform: rotate(0deg); }
+        40% { transform: rotate(-30deg) translateY(-2px); }
+        60% { transform: rotate(60deg) translateY(8px); }
+        100% { transform: rotate(0deg); }
+      }
+      @keyframes stab-dagger {
+        0% { transform: translateX(0); }
+        50% { transform: translateX(8px); }
+        100% { transform: translateX(0); }
+      }
+      @keyframes shoot-bow {
+        0% { transform: translateX(0) rotate(0deg); }
+        50% { transform: translateX(-3px) rotate(-5deg); }
+        70% { transform: translateX(2px) rotate(2deg); }
+        100% { transform: translateX(0) rotate(0deg); }
+      }
+
       .anim-attack-right { animation: anim-lunge-right 0.2s ease-out; }
       .anim-attack-left { animation: anim-lunge-left 0.2s ease-out; }
       .anim-hurt { animation: anim-shake-red 0.3s ease-in-out; }
       .anim-dodge { animation: anim-dodge 0.3s ease-in-out; }
       .anim-float-up { animation: anim-float-up 1s ease-out forwards; }
+      
+      /* Specific Weapon Animation Classes */
+      .anim-swing { animation: swing-sword 0.3s ease-in-out; transform-origin: bottom center; }
+      .anim-chop { animation: swing-axe 0.4s ease-in; transform-origin: bottom center; }
+      .anim-bash { animation: bash-mace 0.4s ease-in; transform-origin: bottom center; }
+      .anim-stab-fast { animation: stab-dagger 0.15s ease-out; }
+      .anim-stab-long { animation: thrust-spear 0.3s ease-out; }
+      .anim-shoot { animation: shoot-bow 0.3s ease-out; }
+      .anim-thrust { animation: thrust-spear 0.4s ease-out; }
 
     </style>
   <script type="importmap">
