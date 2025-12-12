@@ -91,7 +91,7 @@ export interface Entity {
   maxHp?: number;
   level?: number; // Enemy level
   dialogue?: string[];
-  facing?: 'LEFT' | 'RIGHT'; // Visual only
+  facing?: Direction; // Visual only
   loot?: string; // Item ID for chests
   destination?: { mapId: string, x: number, y: number, name: string }; // For signposts or teleporters
   questId?: string; // If this NPC gives a quest
@@ -122,7 +122,7 @@ export type AnimationType = 'ATTACK' | 'HURT' | 'DODGE' | 'HEAL';
 
 export interface GameState {
   playerPos: Position;
-  playerFacing: 'LEFT' | 'RIGHT';
+  playerFacing: Direction;
   currentMapId: string;
   stats: Stats; // Base stats
   equipment: Record<EquipmentSlot, Item | null>; // Equipped items
