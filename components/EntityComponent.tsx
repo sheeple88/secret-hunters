@@ -52,6 +52,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       if (entity.subType === 'SIGNPOST') sprite = ASSETS.SIGNPOST;
       if (entity.subType === 'ANVIL') sprite = ASSETS.ANVIL;
       if (entity.subType === 'WORKBENCH') sprite = ASSETS.WORKBENCH;
+      if (entity.subType === 'ALCHEMY_TABLE') sprite = ASSETS.ALCHEMY_TABLE;
   }
 
   // Animation Classes
@@ -114,6 +115,9 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
         )}
         {animation === 'HURT' && (
             <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-red-500 font-bold animate-bounce">HIT</div>
+        )}
+        {animation === 'HEAL' && (
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-green-400 font-bold anim-float-up">+HP</div>
         )}
 
         {/* Quest/Interaction Indicator */}

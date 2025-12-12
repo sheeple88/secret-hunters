@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, LogEntry, Item, GameMap, Position, Entity, SkillName, Recipe, Skill, EquipmentSlot, Stats, Quest, AnimationType } from './types';
-import { MAPS, SECRETS_DATA, INITIAL_STATS, ITEMS, LOOT_TABLE, INITIAL_SKILLS, RECIPES, QUESTS } from './constants';
+import { MAPS, SECRETS_DATA, INITIAL_STATS, ITEMS, LOOT_TABLE, INITIAL_SKILLS, RECIPES, QUESTS, LOOT_TIERS, EQUIPMENT_TYPES, STAT_SUFFIXES, ENEMY_INFO, ASSETS } from './constants';
 import { Tile } from './components/Tile';
 import { EntityComponent } from './components/EntityComponent';
 import { generateRumor, generateLore } from './services/geminiService';
-import { Terminal, Sparkles, Backpack, Sword, MessageSquare, Hand, Hammer, HelpCircle, Skull, Trophy, Shield, Map as MapIcon, Navigation, Scroll } from 'lucide-react';
+import { Terminal, Sparkles, Backpack, Sword, MessageSquare, Hand, Hammer, HelpCircle, Skull, Trophy, Shield, Map as MapIcon, Navigation, Scroll, BookOpen } from 'lucide-react';
 
 // Helpers
 const getTimestamp = () => Date.now();
@@ -54,9 +54,10 @@ export default function App() {
     knownWaypoints: [],
     knownLocations: ['map_10_10'],
     animations: {},
+    bestiary: [],
   });
 
-  const [activeTab, setActiveTab] = useState<'LOG' | 'SECRETS' | 'INV' | 'SKILLS' | 'EQUIP' | 'MAP'>('LOG');
+  const [activeTab, setActiveTab] = useState<'LOG' | 'SECRETS' | 'INV' | 'SKILLS' | 'EQUIP' | 'MAP' | 'BESTIARY'>('LOG');
   const [isLoadingRumor, setIsLoadingRumor] = useState(false);
   const [showModal, setShowModal] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -101,6 +102,28 @@ export default function App() {
       ...prev,
       logs: [{ id: uid(), message, type, timestamp: getTimestamp() }, ...prev.logs].slice(0, 50)
     }));
+  };
+
+  // Helper to add item to inventory (handles stacking)
+  const addToInventory = (item: Item, state: GameState): Item[] => {
+      const inv = [...state.inventory];
+      // Only stack specific types
+      if (['MATERIAL', 'CONSUMABLE', 'JUNK', 'KEY'].includes(item.type)) {
+          const existing = inv.find(i => i.id === item.id); // Check by ID reference if possible, otherwise name match for generics
+          if (existing) {
+              existing.count += item.count;
+              return inv;
+          }
+          // Fallback to name check if ID differs but same item logic (e.g. static items)
+          const existingByName = inv.find(i => i.name === item.name && i.type === item.type);
+          if (existingByName) {
+              existingByName.count += item.count;
+              return inv;
+          }
+      }
+      // Equipment or new items
+      inv.push(item);
+      return inv;
   };
 
   // Fog of War Logic
@@ -162,7 +185,7 @@ export default function App() {
             currentMapId: 'house_player',
             playerPos: { x: 1, y: 1 }, // Bed
             flags: newFlags,
-            logs: [{ id: uid(), message: 'YOU DIED! Rescued by mysterious forces.', type: 'COMBAT', timestamp: getTimestamp() }, ...prev.logs].slice(0, 50)
+            logs: [{ id: uid(), message: 'YOU DIED! Rescued by mysterious forces.', type: 'COMBAT' as const, timestamp: getTimestamp() }, ...prev.logs].slice(0, 50)
           };
       });
   };
@@ -176,6 +199,7 @@ export default function App() {
               total.str += item.stats.str || 0;
               total.dex += item.stats.dex || 0;
               total.int += item.stats.int || 0;
+              total.regeneration += item.stats.regeneration || 0;
               total.maxHp += item.stats.maxHp || 0;
           }
       });
@@ -202,11 +226,23 @@ export default function App() {
       };
   };
 
-  const generateLoot = (level: number, enemyName: string): Item | null => {
+  // --- PROCEDURAL LOOT GENERATOR ---
+  const generateProceduralLoot = (level: number, enemyName?: string): Item | null => {
       if (Math.random() > 0.4) return null; // 40% chance drop
 
+      // 1. Determine Material Tier based on Level
+      // Find the highest tier where minLvl <= level
+      let tier = LOOT_TIERS[0];
+      for (let i = LOOT_TIERS.length - 1; i >= 0; i--) {
+          if (level >= LOOT_TIERS[i].minLvl) {
+              tier = LOOT_TIERS[i];
+              break;
+          }
+      }
+
+      // 2. Roll Rarity (Weighted)
       const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'GODLY'];
-      const rarityWeights = [0.5, 0.3, 0.15, 0.04, 0.009, 0.0009, 0.0001];
+      const rarityWeights = [0.6, 0.25, 0.1, 0.04, 0.009, 0.0009, 0.0001];
       let r = Math.random();
       let rarityIdx = 0;
       for(let i=0; i<rarityWeights.length; i++) {
@@ -214,35 +250,46 @@ export default function App() {
           r -= rarityWeights[i];
       }
       const rarity = rarities[rarityIdx] as any;
-      const rarityMult = Math.pow(3, rarityIdx); 
+      const rarityMult = Math.pow(1.5, rarityIdx); // Multiplier for rarity
 
-      const slots: EquipmentSlot[] = ['WEAPON', 'HEAD', 'BODY', 'LEGS', 'ACCESSORY'];
+      // 3. Roll Slot & Type
+      const slots: EquipmentSlot[] = ['WEAPON', 'HEAD', 'BODY', 'LEGS', 'OFFHAND', 'ACCESSORY'];
       const slot = slots[Math.floor(Math.random() * slots.length)];
-      
-      let name = "";
-      const materials = ["Wooden", "Iron", "Steel", "Mithril", "Adamant", "Rune", "Dragon", "Crystal", "Obsidian", "Void", "Starlight", "Cosmic"];
-      const matIndex = Math.min(materials.length - 1, Math.floor(level / 20));
-      const material = materials[matIndex];
+      const typeConfig = EQUIPMENT_TYPES[slot];
+      const baseType = typeConfig.names[Math.floor(Math.random() * typeConfig.names.length)];
 
-      const types = {
-          'WEAPON': ['Sword', 'Axe', 'Dagger', 'Mace'],
-          'HEAD': ['Helm', 'Coif', 'Hat'],
-          'BODY': ['Platebody', 'Chainmail', 'Robe'],
-          'LEGS': ['Platelegs', 'Chaps', 'Skirt'],
-          'ACCESSORY': ['Ring', 'Amulet', 'Charm']
-      };
-      const type = types[slot][Math.floor(Math.random() * types[slot].length)];
-      
-      name = `${rarity !== 'COMMON' ? rarity + ' ' : ''}${material} ${type}`;
-
-      const baseStat = level * 2 * rarityMult;
+      // 4. Calculate Stats
       const stats: Partial<Stats> = {};
+      const baseStatPoints = Math.floor((level * 1.5 + 5) * tier.mult * rarityMult * (Math.random() * 0.4 + 0.8)); // +/- 20% variance
       
-      if (slot === 'WEAPON') stats.str = Math.floor(baseStat);
-      if (slot === 'HEAD') stats.maxHp = Math.floor(baseStat * 5);
-      if (slot === 'BODY') stats.maxHp = Math.floor(baseStat * 10);
-      if (slot === 'LEGS') { stats.maxHp = Math.floor(baseStat * 5); stats.dex = Math.floor(baseStat * 0.5); }
-      if (slot === 'ACCESSORY') { stats.str = Math.floor(baseStat * 0.5); stats.int = Math.floor(baseStat * 0.5); }
+      // Distribute points based on slot bias
+      typeConfig.statBias.forEach(statKey => {
+          let val = Math.floor(baseStatPoints / typeConfig.statBias.length);
+          if (statKey === 'regeneration') val = Math.max(1, Math.floor(val / 5)); // Regen is 5x more expensive/rare
+          if (val === 0) val = 1;
+          stats[statKey] = val;
+      });
+
+      // 5. Naming
+      // [Rarity] [Material] [BaseType] [Suffix]
+      // e.g. "Rare Mithril Sword of Power"
+      
+      // Determine Suffix based on highest stat
+      let highestStat: keyof Stats = 'str';
+      let highestVal = 0;
+      (Object.keys(stats) as Array<keyof Stats>).forEach(k => {
+          if ((stats[k] || 0) > highestVal) {
+              highestVal = stats[k] || 0;
+              highestStat = k;
+          }
+      });
+      
+      // Random suffix for that stat
+      const possibleSuffixes = STAT_SUFFIXES.filter(s => s.stat === highestStat);
+      const suffix = possibleSuffixes.length > 0 ? possibleSuffixes[Math.floor(Math.random() * possibleSuffixes.length)].name : '';
+
+      const rarityPrefix = rarity !== 'COMMON' ? rarity + ' ' : '';
+      const name = `${rarityPrefix}${tier.name} ${baseType}${suffix ? ' ' + suffix : ''}`;
 
       return {
           id: uid(),
@@ -250,10 +297,11 @@ export default function App() {
           type: 'EQUIPMENT',
           slot,
           rarity,
-          description: `Level ${level} Gear`,
+          description: `Lvl ${level} ${tier.name} Item`,
           count: 1,
           stats,
-          value: Math.floor(baseStat * 10)
+          levelReq: Math.floor(level * 0.8), // req is slightly lower than drop level
+          value: Math.floor(baseStatPoints * 10)
       };
   };
 
@@ -292,6 +340,36 @@ export default function App() {
       };
     });
   };
+
+  // Regen Loop
+  useEffect(() => {
+    const regenInterval = setInterval(() => {
+      setGameState(prev => {
+        if (prev.stats.hp <= 0) return prev; // Dead men don't regenerate
+        
+        const totalStats = getPlayerTotalStats(prev.stats, prev.equipment);
+        const maxHp = totalStats.maxHp;
+        
+        if (prev.stats.hp >= maxHp) return prev;
+
+        const regenAmount = Math.max(1, Math.floor(totalStats.regeneration)); // Minimum 1
+        const newHp = Math.min(maxHp, prev.stats.hp + regenAmount);
+        
+        // Only trigger animation if actually healed
+        if (newHp > prev.stats.hp) {
+             const newAnimations = { ...prev.animations, player: 'HEAL' as AnimationType };
+             return {
+                 ...prev,
+                 stats: { ...prev.stats, hp: newHp },
+                 animations: newAnimations
+             };
+        }
+        return prev;
+      });
+    }, 5000); // Every 5 seconds
+
+    return () => clearInterval(regenInterval);
+  }, []);
 
   // --- ENEMY AI ---
   const processEnemyTurn = (currentState: GameState): GameState => {
@@ -435,7 +513,7 @@ export default function App() {
             if (prev.logs[0]?.message === msg) return prev;
 
             const nextState = { ...prev, counters, playerFacing: newFacing, stats: { ...prev.stats, hp: prev.stats.hp - 1 } };
-            nextState.logs = [{ id: uid(), message: msg, type: 'COMBAT', timestamp: getTimestamp() }, ...nextState.logs];
+            nextState.logs = [{ id: uid(), message: msg, type: 'COMBAT' as const, timestamp: getTimestamp() }, ...nextState.logs];
             return processEnemyTurn(nextState);
         }
         
@@ -451,7 +529,7 @@ export default function App() {
             if (prev.logs[0]?.message === msg) return prev;
 
             let nextState = { ...prev, playerFacing: newFacing };
-            nextState.logs = [{ id: uid(), message: msg, type: 'COMBAT', timestamp: getTimestamp() }, ...nextState.logs];
+            nextState.logs = [{ id: uid(), message: msg, type: 'COMBAT' as const, timestamp: getTimestamp() }, ...nextState.logs];
             return processEnemyTurn(nextState);
         }
         if (targetEntity.type === 'NPC' || targetEntity.type === 'OBJECT') {
@@ -460,7 +538,7 @@ export default function App() {
              if (prev.logs[0]?.message === msg) return prev;
 
              let nextState = { ...prev, playerFacing: newFacing };
-             nextState.logs = [{ id: uid(), message: msg, type: 'INFO', timestamp: getTimestamp() }, ...nextState.logs];
+             nextState.logs = [{ id: uid(), message: msg, type: 'INFO' as const, timestamp: getTimestamp() }, ...nextState.logs];
              return nextState;
         }
       }
@@ -561,7 +639,7 @@ export default function App() {
               currentMapId: targetMapId,
               playerPos: targetPos,
               flags: nextFlags,
-              logs: [{ id: uid(), message: "Teleported!", type: 'INFO', timestamp: getTimestamp() }, ...prev.logs]
+              logs: [{ id: uid(), message: "Teleported!", type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs]
           };
       });
       setShowModal(null);
@@ -621,8 +699,7 @@ export default function App() {
                                 if (activeQuest.reward.itemId) {
                                     const rewardItem = ITEMS[activeQuest.reward.itemId];
                                     const count = activeQuest.reward.itemCount || 1;
-                                    const existing = inventory.find(i => i.id === rewardItem.id);
-                                    if(existing) existing.count += count; else inventory.push({...rewardItem, count});
+                                    inventory = addToInventory({ ...rewardItem, count }, { ...prev, inventory });
                                     logs.unshift({ id: uid(), message: `Received ${count} ${rewardItem.name}`, type: 'LOOT', timestamp: getTimestamp() });
                                 }
                                 flags[`quest_completed_${activeQuest.id}`] = true;
@@ -650,10 +727,21 @@ export default function App() {
                     const flags = { ...prev.flags, [`looted_${entity.id}`]: true };
                     const counters = { ...prev.counters, open_chest: (prev.counters['open_chest'] || 0) + 1 };
                     const lootKey = entity.loot || 'POTION';
-                    const lootItem = ITEMS[lootKey] ? { ...ITEMS[lootKey], count: 1, id: uid() } : generateLoot(10, 'Chest');
-                    const inventory = [...prev.inventory];
-                    if (lootItem) inventory.push(lootItem);
-                    return { ...prev, flags, counters, inventory, logs: [{ id: uid(), message: `Opened Chest! Found ${lootItem?.name}.`, type: 'SECRET', timestamp: getTimestamp() }, ...prev.logs] };
+                    
+                    // Chest loot generation: use entity.loot if specific, else random level 10 loot
+                    let lootItem: Item | null = null;
+                    if (ITEMS[lootKey]) {
+                        lootItem = { ...ITEMS[lootKey], count: 1, id: uid() };
+                    } else {
+                        // Fallback or explicit random generation for chests
+                        lootItem = generateProceduralLoot(10);
+                    }
+
+                    let inventory = [...prev.inventory];
+                    if (lootItem) {
+                        inventory = addToInventory(lootItem, prev);
+                    }
+                    return { ...prev, flags, counters, inventory, logs: [{ id: uid(), message: `Opened Chest! Found ${lootItem?.name || 'Nothing'}.`, type: 'SECRET' as const, timestamp: getTimestamp() }, ...prev.logs] };
                 } else if (entity.subType === 'BED') {
                     const newStats = { ...prev.stats, hp: prev.stats.maxHp };
                     
@@ -668,13 +756,13 @@ export default function App() {
                         newFlags[key] = prev.flags[key];
                     });
 
-                    return { ...prev, stats: newStats, flags: newFlags, logs: [{ id: uid(), message: "You slept. HP Restored. Common enemies respawned.", type: 'INFO', timestamp: getTimestamp() }, ...prev.logs] };
+                    return { ...prev, stats: newStats, flags: newFlags, logs: [{ id: uid(), message: "You slept. HP Restored. Common enemies respawned.", type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs] };
                 } else if (entity.subType === 'WAYPOINT') {
                     if (!prev.knownWaypoints.includes(map.id)) {
                         return {
                             ...prev,
                             knownWaypoints: [...prev.knownWaypoints, map.id],
-                            logs: [{ id: uid(), message: `Waypoint activated: ${map.name}`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs]
+                            logs: [{ id: uid(), message: `Waypoint activated: ${map.name}`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs]
                         };
                     }
                 } else if (entity.subType === 'SIGNPOST') {
@@ -682,13 +770,13 @@ export default function App() {
                         return {
                             ...prev,
                             knownLocations: [...prev.knownLocations, entity.destination.mapId],
-                            logs: [{ id: uid(), message: `Map Updated: ${entity.destination.name} added to World Map.`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs]
+                            logs: [{ id: uid(), message: `Map Updated: ${entity.destination.name} added to World Map.`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs]
                         };
                     } else if (entity.destination) {
-                        return { ...prev, logs: [{ id: uid(), message: `Sign reads: "${entity.destination.name} nearby"`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs] };
+                        return { ...prev, logs: [{ id: uid(), message: `Sign reads: "${entity.destination.name} nearby"`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs] };
                     }
-                } else if (entity.subType === 'ANVIL' || entity.subType === 'WORKBENCH') {
-                     return { ...prev, logs: [{ id: uid(), message: `A ${entity.name}. Use the Crafting menu to make items.`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs] };
+                } else if (entity.subType === 'ANVIL' || entity.subType === 'WORKBENCH' || entity.subType === 'ALCHEMY_TABLE') {
+                     return { ...prev, logs: [{ id: uid(), message: `A ${entity.name}. Use the Crafting menu to make items.`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs] };
                 }
              }
 
@@ -702,22 +790,29 @@ export default function App() {
                  if (tile === 'TREE') {
                      addSkillXp('Woodcutting', 15);
                      const log = ITEMS.LOG;
-                     const inventory = [...prev.inventory];
-                     const existing = inventory.find(i => i.id === log.id);
-                     if (existing) existing.count++; else inventory.push({ ...log, count: 1 });
-                     return { ...prev, inventory, logs: [{ id: uid(), message: "You chop some logs.", type: 'SKILL', timestamp: getTimestamp() }, ...prev.logs] };
+                     const inventory = addToInventory({ ...log, count: 1 }, prev);
+                     return { ...prev, inventory, logs: [{ id: uid(), message: "You chop some logs.", type: 'SKILL' as const, timestamp: getTimestamp() }, ...prev.logs] };
                  }
                  if (tile === 'ROCK') {
                      addSkillXp('Mining', 15);
                      const ore = Math.random() > 0.5 ? ITEMS.COPPER_ORE : ITEMS.PEBBLE;
-                     const inventory = [...prev.inventory];
-                     const existing = inventory.find(i => i.id === ore.id);
-                     if (existing) existing.count++; else inventory.push({ ...ore, count: 1 });
-                     return { ...prev, inventory, logs: [{ id: uid(), message: `You mine some ${ore.name}.`, type: 'SKILL', timestamp: getTimestamp() }, ...prev.logs] };
+                     const inventory = addToInventory({ ...ore, count: 1 }, prev);
+                     return { ...prev, inventory, logs: [{ id: uid(), message: `You mine some ${ore.name}.`, type: 'SKILL' as const, timestamp: getTimestamp() }, ...prev.logs] };
+                 }
+                 if (tile === 'FLOWER') {
+                     addSkillXp('Alchemy', 10);
+                     const herb = ITEMS.RED_HERB;
+                     const inventory = addToInventory({ ...herb, count: 1 }, prev);
+                     return { ...prev, inventory, logs: [{ id: uid(), message: `You gather some ${herb.name}.`, type: 'SKILL' as const, timestamp: getTimestamp() }, ...prev.logs] };
+                 }
+                 if (tile === 'SAND') {
+                     const sand = ITEMS.SAND;
+                     const inventory = addToInventory({ ...sand, count: 1 }, prev);
+                     return { ...prev, inventory, logs: [{ id: uid(), message: `You scoop up some ${sand.name}.`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs] };
                  }
              }
              
-             return { ...prev, logs: [{ id: uid(), message: "Nothing to interact with.", type: 'INFO', timestamp: getTimestamp() }, ...prev.logs] };
+             return { ...prev, logs: [{ id: uid(), message: "Nothing to interact with.", type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs] };
          });
          return; 
     }
@@ -733,6 +828,7 @@ export default function App() {
       let stats = { ...prev.stats };
       let activeQuest = prev.activeQuest ? { ...prev.activeQuest } : null;
       let animations = { ...prev.animations };
+      let bestiary = [...prev.bestiary];
 
       const pushLog = (msg: string, type: LogEntry['type']) => {
           logs = [{ id: uid(), message: msg, type, timestamp: getTimestamp() }, ...logs];
@@ -792,6 +888,13 @@ export default function App() {
                 if (stats.hp < (stats.maxHp * 0.1)) flags['win_low_hp'] = true;
                 flags[`dead_${target.id}`] = true;
 
+                // --- BESTIARY UNLOCK ---
+                const rawName = target.name.replace('Elite ', '');
+                if (!bestiary.includes(rawName)) {
+                    bestiary.push(rawName);
+                    pushLog(`New Bestiary Entry: ${rawName}!`, 'SECRET');
+                }
+
                 // Quest Progress Check
                 if (activeQuest && !activeQuest.completed && activeQuest.type === 'KILL') {
                     if (target.name.includes(activeQuest.targetId)) {
@@ -805,14 +908,16 @@ export default function App() {
                     }
                 }
 
-                const loot = generateLoot(target.level || 1, target.name);
+                const loot = generateProceduralLoot(target.level || 1, target.name);
+                
                 if (loot) {
-                    inventory.push(loot);
+                    // Only use new procedural loot logic
+                    inventory = addToInventory(loot, { ...prev, inventory });
                     pushLog(`DROP: ${loot.name}`, 'LOOT');
                 } else if (LOOT_TABLE[target.name]) {
+                    // Fallback to static loot table if procedural failed but static exists (mostly materials)
                     const item = ITEMS[LOOT_TABLE[target.name]];
-                    const existing = inventory.find(i => i.id === item.id);
-                    if (existing) existing.count++; else inventory.push({...item, count: 1});
+                    inventory = addToInventory({ ...item, count: 1 }, { ...prev, inventory });
                     pushLog(`Found ${item.name}`, 'LOOT');
                 }
             }
@@ -830,6 +935,7 @@ export default function App() {
           activeQuest,
           animations, // Pass active animations
           logs: logs.slice(0, 50),
+          bestiary,
       });
     });
   };
@@ -849,7 +955,7 @@ export default function App() {
                  Math.abs(e.pos.x - prev.playerPos.x) + Math.abs(e.pos.y - prev.playerPos.y) <= 2
              );
              if (!nearbyStation) {
-                 addLog(`Requires nearby ${recipe.station}!`, 'INFO');
+                 addLog(`Requires nearby ${recipe.station.replace('_', ' ')}!`, 'INFO');
                  return prev;
              }
          }
@@ -866,15 +972,17 @@ export default function App() {
              const item = inv.find(i => i.id === ing.itemId)!;
              item.count -= ing.count;
          }
-         const result = ITEMS[recipe.resultItemId];
-         const existing = inv.find(i => i.id === result.id && i.type !== 'EQUIPMENT');
-         if (existing) existing.count += recipe.yield;
-         else inv.push({ ...result, count: recipe.yield });
+         
+         // Add crafted item
+         const resultBase = ITEMS[recipe.resultItemId];
+         // Note: If we want crafted items to scale, we'd need procedural generation here too.
+         // For now, keep static recipe results but use the helper.
+         const newInv = addToInventory({ ...resultBase, count: recipe.yield }, { ...prev, inventory: inv.filter(i => i.count > 0) });
 
          addSkillXp(recipe.skill, recipe.xpReward);
-         addLog(`Crafted ${result.name}! +${recipe.xpReward} ${recipe.skill} XP`, 'SKILL');
+         addLog(`Crafted ${resultBase.name}! +${recipe.xpReward} ${recipe.skill} XP`, 'SKILL');
 
-         return { ...prev, inventory: inv.filter(i => i.count > 0) };
+         return { ...prev, inventory: newInv };
      });
   };
 
@@ -895,7 +1003,7 @@ export default function App() {
                   [item.slot]: item
               },
               inventory: newInv,
-              logs: [{ id: uid(), message: `Equipped ${item.name}`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs]
+              logs: [{ id: uid(), message: `Equipped ${item.name}`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs]
           };
       });
   };
@@ -912,7 +1020,7 @@ export default function App() {
                   [slot]: null
               },
               inventory: [...prev.inventory, item],
-              logs: [{ id: uid(), message: `Unequipped ${item.name}`, type: 'INFO', timestamp: getTimestamp() }, ...prev.logs]
+              logs: [{ id: uid(), message: `Unequipped ${item.name}`, type: 'INFO' as const, timestamp: getTimestamp() }, ...prev.logs]
           };
       });
   };
@@ -1008,6 +1116,7 @@ export default function App() {
                      <span title="Strength">STR {formatNumber(totalStats.str)}</span>
                      <span title="Dexterity">DEX {formatNumber(totalStats.dex)}</span>
                      <span title="Intelligence">INT {formatNumber(totalStats.int)}</span>
+                     <span title="Regeneration" className="text-green-400">REG {formatNumber(totalStats.regeneration)}</span>
                  </div>
              </div>
         </div>
@@ -1132,6 +1241,7 @@ export default function App() {
           <button onClick={() => setActiveTab('INV')} className={`flex-1 p-3 flex justify-center transition-colors ${activeTab === 'INV' ? 'bg-stone-800 text-yellow-500' : 'text-stone-600 hover:text-stone-400'}`}><Backpack size={20} /></button>
           <button onClick={() => setActiveTab('MAP')} className={`flex-1 p-3 flex justify-center transition-colors ${activeTab === 'MAP' ? 'bg-stone-800 text-yellow-500' : 'text-stone-600 hover:text-stone-400'}`}><MapIcon size={20} /></button>
           <button onClick={() => setActiveTab('SKILLS')} className={`flex-1 p-3 flex justify-center transition-colors ${activeTab === 'SKILLS' ? 'bg-stone-800 text-yellow-500' : 'text-stone-600 hover:text-stone-400'}`}><Trophy size={20} /></button>
+          <button onClick={() => setActiveTab('BESTIARY')} className={`flex-1 p-3 flex justify-center transition-colors ${activeTab === 'BESTIARY' ? 'bg-stone-800 text-yellow-500' : 'text-stone-600 hover:text-stone-400'}`}><BookOpen size={20} /></button>
         </div>
 
         {/* Tab Content */}
@@ -1196,6 +1306,7 @@ export default function App() {
                            <div>DEX: <span className="text-white">{formatNumber(totalStats.dex)}</span></div>
                            <div>INT: <span className="text-white">{formatNumber(totalStats.int)}</span></div>
                            <div>HP: <span className="text-white">{formatNumber(totalStats.maxHp)}</span></div>
+                           <div>REG: <span className="text-green-400">{formatNumber(totalStats.regeneration)}</span></div>
                       </div>
                   </div>
               </div>
@@ -1260,7 +1371,7 @@ export default function App() {
                                     <Hammer size={14} /> {recipe.name}
                                 </span>
                                 <span className="text-xs flex gap-2">
-                                    {recipe.station && <span className="text-yellow-500 bg-yellow-900/30 px-1 rounded">@{recipe.station}</span>}
+                                    {recipe.station && <span className="text-yellow-500 bg-yellow-900/30 px-1 rounded">@{recipe.station.replace('_', ' ')}</span>}
                                     <span>{recipe.skill} Lv.{recipe.levelReq}</span>
                                 </span>
                             </div>
@@ -1373,6 +1484,48 @@ export default function App() {
                  ))}
                </div>
              </div>
+          )}
+
+          {activeTab === 'BESTIARY' && (
+              <div>
+                  <h3 className="text-stone-500 mb-4 uppercase tracking-widest text-xs border-b border-stone-800 pb-1 flex justify-between">
+                      <span>Monster Log</span>
+                      <span>{gameState.bestiary.length}/{Object.keys(ENEMY_INFO).length}</span>
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {Object.keys(ENEMY_INFO).map(enemyName => {
+                          const unlocked = gameState.bestiary.includes(enemyName);
+                          const info = ENEMY_INFO[enemyName];
+                          const asset = ASSETS[info.assetKey];
+                          
+                          return (
+                              <div key={enemyName} className={`bg-stone-800 p-3 rounded border flex flex-col items-center text-center transition-all ${unlocked ? 'border-stone-600' : 'border-stone-800 opacity-60'}`}>
+                                  <div className="w-12 h-12 bg-black/50 rounded flex items-center justify-center mb-2 overflow-hidden border border-stone-700">
+                                      {unlocked ? (
+                                          <img src={asset} className="w-8 h-8 object-contain" style={{imageRendering:'pixelated'}} alt={enemyName} />
+                                      ) : (
+                                          <span className="text-2xl text-stone-700">?</span>
+                                      )}
+                                  </div>
+                                  {unlocked ? (
+                                      <>
+                                          <div className="font-bold text-red-400 text-sm mb-1">{enemyName}</div>
+                                          <div className="text-[10px] text-stone-400 leading-tight mb-2 h-8 overflow-hidden">{info.description}</div>
+                                          <div className="w-full border-t border-stone-700 pt-1 mt-auto">
+                                              <div className="text-[10px] text-stone-500 uppercase">Drops</div>
+                                              <div className="text-[10px] text-yellow-600 font-mono">
+                                                  {LOOT_TABLE[enemyName] ? ITEMS[LOOT_TABLE[enemyName]]?.name || '???' : 'Equipment'}
+                                              </div>
+                                          </div>
+                                      </>
+                                  ) : (
+                                      <div className="text-sm text-stone-600 mt-2">Unknown</div>
+                                  )}
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
           )}
         </div>
       </div>

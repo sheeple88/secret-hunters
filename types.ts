@@ -10,13 +10,14 @@ export type Stats = {
   str: number;
   dex: number;
   int: number;
+  regeneration: number;
   hp: number;
   maxHp: number;
   xp: number;
   level: number;
 };
 
-export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Woodcutting' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving';
+export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Woodcutting' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy';
 
 export interface Skill {
   name: SkillName;
@@ -33,7 +34,7 @@ export interface Recipe {
     levelReq: number;
     xpReward: number;
     ingredients: { itemId: string; count: number }[];
-    station?: 'ANVIL' | 'WORKBENCH'; // Requirement
+    station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE'; // Requirement
 }
 
 export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY';
@@ -82,7 +83,7 @@ export interface Entity {
   id: string;
   name: string;
   type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH'; // Specific object behaviors
+  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE'; // Specific object behaviors
   symbol: string; // Emoji or char
   color: string;
   pos: Position;
@@ -117,7 +118,7 @@ export interface LogEntry {
   timestamp: number;
 }
 
-export type AnimationType = 'ATTACK' | 'HURT' | 'DODGE';
+export type AnimationType = 'ATTACK' | 'HURT' | 'DODGE' | 'HEAL';
 
 export interface GameState {
   playerPos: Position;
@@ -128,6 +129,7 @@ export interface GameState {
   skills: Record<SkillName, Skill>;
   inventory: Item[];
   secrets: Secret[];
+  bestiary: string[]; // List of unlocked enemy names
   counters: Record<string, number>; // Generic counters for tracking actions
   logs: LogEntry[];
   flags: Record<string, boolean>; // Boolean flags for one-off events

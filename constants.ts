@@ -1,5 +1,5 @@
 
-import { GameMap, Secret, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest } from './types';
+import { GameMap, Secret, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats } from './types';
 
 // Helper for pixel art assets
 const createAsset = (svgContent: string) => 
@@ -180,6 +180,14 @@ export const ASSETS = {
     <rect x="12" y="10" width="2" height="6" fill="#78350f"/>
     <rect x="3" y="5" width="4" height="1" fill="#fcd34d"/>
   `),
+  ALCHEMY_TABLE: createAsset(`
+    <rect x="2" y="6" width="12" height="8" fill="#5D4037"/>
+    <rect x="1" y="6" width="14" height="2" fill="#8D6E63"/>
+    <circle cx="4" cy="4" r="2" fill="#E91E63" opacity="0.8"/>
+    <rect x="3" y="3" width="2" height="3" fill="#E91E63" opacity="0.8"/>
+    <rect x="8" y="2" width="2" height="4" fill="#2196F3" opacity="0.8"/>
+    <circle cx="12" cy="5" r="1.5" fill="#4CAF50" opacity="0.8"/>
+  `),
 
   // Entities
   PLAYER: createAsset(`
@@ -221,11 +229,39 @@ export const ASSETS = {
   MERCHANT: createAsset(`<rect x="4" y="6" width="8" height="9" fill="#166534"/><rect x="5" y="2" width="6" height="5" fill="#fca5a5"/><rect x="3" y="1" width="10" height="2" fill="#facc15"/>`),
 };
 
+// --- ENEMY DATABASE ---
+export const ENEMY_INFO: Record<string, {
+    description: string;
+    assetKey: keyof typeof ASSETS;
+}> = {
+    'Slime': { description: "A mindless blob of gelatinous acidity. Eats anything.", assetKey: 'SLIME' },
+    'Rat': { description: "An unusually large rodent found in dark places.", assetKey: 'RAT' },
+    'Bat': { description: "A flying nuisance that drains blood.", assetKey: 'BAT' },
+    'Spider': { description: "Eight legs, many eyes, and venomous fangs.", assetKey: 'SPIDER' },
+    'Goblin': { description: "A small, green, greedy humanoid.", assetKey: 'GOBLIN' },
+    'Ghost': { description: "A restless spirit that chills the air.", assetKey: 'GHOST' },
+    'Skeleton': { description: "A pile of bones animated by dark magic.", assetKey: 'SKELETON' },
+    'Snake': { description: "A slithering reptile with a deadly bite.", assetKey: 'SNAKE' },
+    'Scorpion': { description: "Armed with claws and a venomous stinger.", assetKey: 'SCORPION' },
+    'Wolf': { description: "A wild hunter that travels in packs.", assetKey: 'WOLF' },
+    'Bear': { description: "A massive beast with crushing strength.", assetKey: 'BEAR' },
+    'Zombie': { description: "A rotting corpse that hungers for flesh.", assetKey: 'ZOMBIE' },
+    'Vampire': { description: "An immortal bloodsucker of the night.", assetKey: 'VAMPIRE' },
+    'Knight': { description: "A fallen warrior in rusted armor.", assetKey: 'KNIGHT' },
+    'Ice Golem': { description: "A construct of living ice and frost.", assetKey: 'ICE_GOLEM' },
+    'Minotaur': { description: "Half-man, half-bull, full of rage.", assetKey: 'MINOTAUR' },
+    'Beholder': { description: "A floating eye that sees all.", assetKey: 'BEHOLDER' },
+    'Dragon': { description: "The apex predator of the skies. Breaths fire.", assetKey: 'DRAGON' },
+    'Kraken': { description: "A legendary horror from the deep ocean.", assetKey: 'KRAKEN' },
+    'Lich': { description: "A powerful undead wizard who cheated death.", assetKey: 'LICH' },
+};
+
 // Initial Player Stats
 export const INITIAL_STATS = {
   str: 10,
   dex: 10,
   int: 10,
+  regeneration: 1,
   hp: 100,
   maxHp: 100,
   xp: 0,
@@ -241,9 +277,55 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
     Crafting: { name: 'Crafting', level: 1, xp: 0 },
     Fletching: { name: 'Fletching', level: 1, xp: 0 },
     Carving: { name: 'Carving', level: 1, xp: 0 },
+    Alchemy: { name: 'Alchemy', level: 1, xp: 0 },
 };
 
-// --- Items ---
+// --- Items & Procedural Generation Data ---
+
+export const LOOT_TIERS = [
+    { name: 'Wooden', minLvl: 1, mult: 1 },
+    { name: 'Copper', minLvl: 5, mult: 1.5 },
+    { name: 'Iron', minLvl: 10, mult: 2.5 },
+    { name: 'Steel', minLvl: 20, mult: 4 },
+    { name: 'Mithril', minLvl: 35, mult: 6.5 },
+    { name: 'Adamant', minLvl: 50, mult: 10 },
+    { name: 'Rune', minLvl: 70, mult: 15 },
+    { name: 'Dragon', minLvl: 90, mult: 25 },
+    { name: 'Crystal', minLvl: 120, mult: 40 },
+    { name: 'Obsidian', minLvl: 150, mult: 60 },
+    { name: 'Void', minLvl: 200, mult: 90 },
+    { name: 'Starlight', minLvl: 300, mult: 150 },
+    { name: 'Cosmic', minLvl: 500, mult: 300 },
+];
+
+export const EQUIPMENT_TYPES: Record<EquipmentSlot, { names: string[], statBias: (keyof Stats)[] }> = {
+    'WEAPON': { names: ['Sword', 'Axe', 'Mace', 'Dagger', 'Spear'], statBias: ['str', 'dex'] },
+    'HEAD': { names: ['Helm', 'Coif', 'Hat', 'Hood'], statBias: ['maxHp', 'int'] },
+    'BODY': { names: ['Platebody', 'Chainmail', 'Robe', 'Tunic'], statBias: ['maxHp', 'regeneration'] },
+    'LEGS': { names: ['Platelegs', 'Skirt', 'Chaps', 'Greaves'], statBias: ['maxHp', 'dex'] },
+    'OFFHAND': { names: ['Shield', 'Buckler', 'Tome', 'Orb'], statBias: ['maxHp', 'int'] },
+    'ACCESSORY': { names: ['Ring', 'Amulet', 'Charm', 'Talisman'], statBias: ['str', 'dex', 'int', 'maxHp', 'regeneration'] } // Random
+};
+
+export const STAT_SUFFIXES: { stat: keyof Stats, name: string }[] = [
+    { stat: 'str', name: 'of Power' },
+    { stat: 'str', name: 'of Giants' },
+    { stat: 'str', name: 'of Smashing' },
+    { stat: 'dex', name: 'of Speed' },
+    { stat: 'dex', name: 'of the Hawk' },
+    { stat: 'dex', name: 'of Precision' },
+    { stat: 'int', name: 'of Magic' },
+    { stat: 'int', name: 'of the Mind' },
+    { stat: 'int', name: 'of Wisdom' },
+    { stat: 'maxHp', name: 'of Vitality' },
+    { stat: 'maxHp', name: 'of the Bear' },
+    { stat: 'maxHp', name: 'of Life' },
+    { stat: 'regeneration', name: 'of Mending' },
+    { stat: 'regeneration', name: 'of Trolls' },
+    { stat: 'regeneration', name: 'of Regrowth' },
+];
+
+// Static items for crafting/questing reference
 export const ITEMS: Record<string, Item> = {
   // Existing
   SLIME_GOO: { id: 'SLIME_GOO', name: 'Slime Goo', type: 'MATERIAL', description: 'Sticky.', count: 0 },
@@ -257,6 +339,10 @@ export const ITEMS: Record<string, Item> = {
   SPIDER_SILK: { id: 'SPIDER_SILK', name: 'Spider Silk', type: 'MATERIAL', description: 'Strong thread.', count: 0 },
   GOBLIN_EAR: { id: 'GOBLIN_EAR', name: 'Goblin Ear', type: 'MATERIAL', description: 'Waxy.', count: 0 },
   ECTOPLASM: { id: 'ECTOPLASM', name: 'Ectoplasm', type: 'MATERIAL', description: 'Slimy ghost residue.', count: 0 },
+  // Alchemy
+  SAND: { id: 'SAND', name: 'Sand', type: 'MATERIAL', description: 'Grains of earth.', count: 0 },
+  EMPTY_VIAL: { id: 'EMPTY_VIAL', name: 'Empty Vial', type: 'MATERIAL', description: 'Holds liquids.', count: 0 },
+  RED_HERB: { id: 'RED_HERB', name: 'Red Herb', type: 'MATERIAL', description: 'Medicinal plant.', count: 0 },
   // New
   SNAKE_SKIN: { id: 'SNAKE_SKIN', name: 'Snake Skin', type: 'MATERIAL', description: 'Scaly and dry.', count: 0 },
   SCORPION_TAIL: { id: 'SCORPION_TAIL', name: 'Stinger', type: 'MATERIAL', description: 'Still dripping venom.', count: 0 },
@@ -310,6 +396,9 @@ export const RECIPES: Recipe[] = [
     { id: 'totem', name: 'Totem', resultItemId: 'TOTEM', yield: 1, skill: 'Carving', levelReq: 3, xpReward: 30, ingredients: [{itemId: 'LOG', count: 1}] },
     { id: 'iron_ingot', name: 'Iron Ingot', resultItemId: 'IRON_INGOT', yield: 1, skill: 'Crafting', levelReq: 10, xpReward: 100, ingredients: [{itemId: 'COPPER_ORE', count: 5}], station: 'ANVIL' },
     { id: 'iron_sword', name: 'Iron Sword', resultItemId: 'IRON_SWORD', yield: 1, skill: 'Crafting', levelReq: 15, xpReward: 200, ingredients: [{itemId: 'IRON_INGOT', count: 2}, {itemId: 'LOG', count: 1}], station: 'ANVIL' },
+    // Alchemy
+    { id: 'empty_vial', name: 'Empty Vial', resultItemId: 'EMPTY_VIAL', yield: 1, skill: 'Crafting', levelReq: 1, xpReward: 5, ingredients: [{itemId: 'SAND', count: 2}], station: 'WORKBENCH' },
+    { id: 'red_potion_craft', name: 'Red Potion', resultItemId: 'POTION', yield: 1, skill: 'Alchemy', levelReq: 1, xpReward: 15, ingredients: [{itemId: 'EMPTY_VIAL', count: 1}, {itemId: 'RED_HERB', count: 2}], station: 'ALCHEMY_TABLE' },
 ];
 
 export const QUESTS: Record<string, Quest> = {
@@ -387,6 +476,110 @@ export const SECRETS_DATA: Omit<Secret, 'unlocked'>[] = [
         hint: 'Hoarder.',
         statBonus: { int: 2, xp: 50 },
         condition: (gs: GameState) => gs.inventory.filter(i => i.type === 'MATERIAL').length >= 5
+    },
+    {
+        id: 'lumberjack',
+        title: 'Timber!',
+        description: 'You have chopped down an entire forest\'s worth of wood.',
+        hint: 'Deforest the land.',
+        statBonus: { str: 2, xp: 100 },
+        condition: (gs: GameState) => gs.skills['Woodcutting'].level >= 5
+    },
+    {
+        id: 'stone_cold',
+        title: 'Stone Cold',
+        description: 'Your pickaxe has struck the earth hundreds of times.',
+        hint: 'Mining makes you strong.',
+        statBonus: { str: 2, xp: 100 },
+        condition: (gs: GameState) => gs.skills['Mining'].level >= 5
+    },
+    {
+        id: 'slime_nightmare',
+        title: 'Slime Nightmare',
+        description: 'The slime population has significantly decreased due to your actions.',
+        hint: 'Green jelly hates you.',
+        statBonus: { dex: 3, xp: 150 },
+        condition: (gs: GameState) => (gs.counters['kill_slime'] || 0) >= 20
+    },
+    {
+        id: 'boss_dragon',
+        title: 'Dragonslayer',
+        description: 'You faced the beast of the volcano and emerged victorious.',
+        hint: 'Seek the hottest place on the map.',
+        statBonus: { str: 10, maxHp: 100, xp: 5000 },
+        condition: (gs: GameState) => !!gs.flags['dead_BOSS_DRAGON']
+    },
+    {
+        id: 'boss_lich',
+        title: 'Undead Bane',
+        description: 'The ancient Lich has been put to rest, again.',
+        hint: 'Find the ruins in the northeast.',
+        statBonus: { int: 10, maxHp: 50, xp: 4000 },
+        condition: (gs: GameState) => !!gs.flags['dead_BOSS_LICH']
+    },
+    {
+        id: 'boss_kraken',
+        title: 'Sushi Chef',
+        description: 'The horror of the deep is now dinner.',
+        hint: 'The desert hides a watery secret in the southwest.',
+        statBonus: { dex: 10, maxHp: 50, xp: 4000 },
+        condition: (gs: GameState) => !!gs.flags['dead_BOSS_KRAKEN']
+    },
+    {
+        id: 'boss_golem',
+        title: 'Ice Breaker',
+        description: 'You shattered the frozen guardian.',
+        hint: 'The northwest tundra holds a giant.',
+        statBonus: { str: 5, maxHp: 150, xp: 3000 },
+        condition: (gs: GameState) => !!gs.flags['dead_BOSS_GOLEM']
+    },
+    {
+        id: 'full_kit',
+        title: 'Fully Suited',
+        description: 'You have equipped an item in every slot.',
+        hint: 'Cover your shame.',
+        statBonus: { maxHp: 20, xp: 200 },
+        condition: (gs: GameState) => Object.values(gs.equipment).every(i => i !== null)
+    },
+    {
+        id: 'legendary_hero',
+        title: 'Legendary Hero',
+        description: 'You found an item of Legendary rarity.',
+        hint: 'Get lucky with loot.',
+        statBonus: { int: 5, xp: 1000 },
+        condition: (gs: GameState) => gs.inventory.some(i => i.rarity === 'LEGENDARY') || Object.values(gs.equipment).some(i => i?.rarity === 'LEGENDARY')
+    },
+    {
+        id: 'headbanger',
+        title: 'Headbanger',
+        description: 'You ran into walls 50 times. Are you okay?',
+        hint: 'Watch where you are walking.',
+        statBonus: { int: -1, maxHp: 10 },
+        condition: (gs: GameState) => (gs.counters['bump_wall'] || 0) >= 50
+    },
+    {
+        id: 'party_animal',
+        title: 'Party Animal',
+        description: 'You danced 20 times in the Secret Village.',
+        hint: 'Dance like everyone is watching at home.',
+        statBonus: { dex: 2, xp: 50 },
+        condition: (gs: GameState) => (gs.counters['dance_town'] || 0) >= 20
+    },
+    {
+        id: 'globetrotter',
+        title: 'Globetrotter',
+        description: 'You have visited every major town.',
+        hint: 'Visit all 5 settlements.',
+        statBonus: { int: 5, xp: 500 },
+        condition: (gs: GameState) => gs.knownWaypoints.length >= 5
+    },
+    {
+        id: 'flower_child',
+        title: 'Flower Child',
+        description: 'You trampled 50 flowers. You monster.',
+        hint: 'Stop smelling the roses.',
+        statBonus: { int: 2, xp: 50 },
+        condition: (gs: GameState) => (gs.counters['step_flower'] || 0) >= 50
     }
 ];
 
@@ -424,7 +617,8 @@ const createWorld = () => {
   housePlayer.entities = [
       { id: 'bed', name: 'Bed', type: 'OBJECT', subType: 'BED', symbol: '=', color: 'red', pos: { x: 1, y: 1 } },
       { id: 'chest1', name: 'Old Chest', type: 'OBJECT', subType: 'CHEST', symbol: 'H', color: 'brown', pos: { x: 6, y: 1 }, loot: 'POTION' },
-      { id: 'wb1', name: 'Workbench', type: 'OBJECT', subType: 'WORKBENCH', symbol: 'T', color: 'brown', pos: { x: 3, y: 1 } }
+      { id: 'wb1', name: 'Workbench', type: 'OBJECT', subType: 'WORKBENCH', symbol: 'T', color: 'brown', pos: { x: 3, y: 1 } },
+      { id: 'alch1', name: 'Alchemy Table', type: 'OBJECT', subType: 'ALCHEMY_TABLE', symbol: 'A', color: 'purple', pos: { x: 5, y: 1 } }
   ];
   worldMaps['house_player'] = housePlayer;
 
@@ -440,6 +634,9 @@ const createWorld = () => {
   // Fix Blacksmith Door (Right Side)
   interiorBlacksmith.tiles[7][4] = 'WALL'; // Remove default
   interiorBlacksmith.tiles[4][7] = 'DOOR'; // Add new
+  // Add Cellar Hatch
+  interiorBlacksmith.tiles[6][6] = 'VOID'; // Hatch
+  
   interiorBlacksmith.entities = [
       { id: 'npc_blacksmith', name: 'Blacksmith', type: 'NPC', symbol: 'B', color: 'grey', pos: {x: 3, y: 3}, dialogue: ["Need something forged?", "The rats in my cellar are eating my leather straps."], questId: 'q_rat_problem' },
       { id: 'anvil1', name: 'Anvil', type: 'OBJECT', subType: 'ANVIL', symbol: 'A', color: 'grey', pos: {x: 4, y: 3} },
@@ -462,6 +659,25 @@ const createWorld = () => {
       { id: 'chest_shop', name: 'Goods', type: 'OBJECT', subType: 'CHEST', symbol: 'H', color: 'brown', pos: {x: 6, y: 1}, loot: 'POTION' }
   ];
   worldMaps['interior_shop'] = interiorShop;
+
+  // New Cellar
+  const interiorCellar = createInterior('interior_cellar', "Musty Cellar");
+  interiorCellar.tiles = generateMap(8, 8, 'STONE_BRICK');
+  for(let i=0; i<8; i++) { interiorCellar.tiles[0][i] = 'WALL'; interiorCellar.tiles[7][i] = 'WALL'; }
+  for(let i=0; i<8; i++) { interiorCellar.tiles[i][0] = 'WALL'; interiorCellar.tiles[i][7] = 'WALL'; }
+  interiorCellar.tiles[7][4] = 'WALL'; // Remove default door
+  interiorCellar.tiles[1][1] = 'DIRT_PATH'; // Entrance
+  interiorCellar.entities = [
+      { id: 'rat1', name: 'Rat', type: 'ENEMY', symbol: 'r', color: 'gray', pos: { x: 3, y: 3 }, level: 2, hp: 15, maxHp: 15 },
+      { id: 'rat2', name: 'Rat', type: 'ENEMY', symbol: 'r', color: 'gray', pos: { x: 5, y: 5 }, level: 2, hp: 15, maxHp: 15 },
+      { id: 'rat3', name: 'Rat', type: 'ENEMY', symbol: 'r', color: 'gray', pos: { x: 2, y: 6 }, level: 3, hp: 20, maxHp: 20 },
+      { id: 'chest_cellar', name: 'Old Chest', type: 'OBJECT', subType: 'CHEST', symbol: 'H', color: 'brown', pos: { x: 6, y: 6 }, loot: 'OLD_BOOT' }
+  ];
+  worldMaps['interior_cellar'] = interiorCellar;
+
+  // Link Blacksmith <-> Cellar
+  interiorBlacksmith.exits.push({ pos: { x: 6, y: 6 }, targetMapId: 'interior_cellar', targetPos: { x: 1, y: 2 } });
+  interiorCellar.exits.push({ pos: { x: 1, y: 1 }, targetMapId: 'interior_blacksmith', targetPos: { x: 5, y: 6 } });
 
 
   // 2. Generate Grid
@@ -534,12 +750,14 @@ const createWorld = () => {
               tiles = generateMap(MAP_WIDTH, MAP_HEIGHT, 'GRASS');
               for(let i=0; i<MAP_WIDTH; i++) { tiles[0][i] = 'WALL'; tiles[MAP_HEIGHT-1][i] = 'WALL'; }
               for(let i=0; i<MAP_HEIGHT; i++) { tiles[i][0] = 'WALL'; tiles[i][MAP_WIDTH-1] = 'WALL'; }
-              // Gates
-              tiles[4][0] = 'DIRT_PATH'; tiles[4][MAP_WIDTH-1] = 'DIRT_PATH';
+              
+              // New Road Layout: Horizontal at y=7 (center), Vertical at x=10 (center)
+              // Gates - Align with road
+              tiles[7][0] = 'DIRT_PATH'; tiles[7][MAP_WIDTH-1] = 'DIRT_PATH';
               tiles[0][10] = 'DIRT_PATH'; tiles[MAP_HEIGHT-1][10] = 'DIRT_PATH';
               
               // Roads
-              for(let x=1; x<MAP_WIDTH-1; x++) tiles[4][x] = 'DIRT_PATH';
+              for(let x=1; x<MAP_WIDTH-1; x++) tiles[7][x] = 'DIRT_PATH';
               for(let y=1; y<MAP_HEIGHT-1; y++) tiles[y][10] = 'DIRT_PATH';
               
               // Helper to build house
@@ -554,31 +772,29 @@ const createWorld = () => {
                   return { x: bx+doorRelX, y: by+doorRelY };
               };
 
-              // Player House (West Top)
-              let d = buildHouse(2, 6, 6, 5, 3, 4); // door at bottom
+              // Player House (Top Left)
+              let d = buildHouse(2, 2, 6, 5, 3, 4); // door at bottom
               worldMaps['house_player'].exits = [{ pos: { x: 4, y: 7 }, targetMapId: mapId, targetPos: { x: d.x, y: d.y + 1 } }];
               exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'house_player', targetPos: { x: 4, y: 6 } });
 
-              // Elder House (East Top)
-              d = buildHouse(12, 6, 6, 5, 2, 4);
+              // Elder House (Top Right)
+              d = buildHouse(13, 2, 6, 5, 2, 4);
               worldMaps['house_elder'].exits = [{ pos: { x: 4, y: 7 }, targetMapId: mapId, targetPos: { x: d.x, y: d.y + 1 } }];
               exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'house_elder', targetPos: { x: 4, y: 6 } });
 
-              // Blacksmith (South West)
-              d = buildHouse(2, 10, 6, 5, 5, 2); // door right
+              // Blacksmith (Bottom Left)
+              d = buildHouse(2, 9, 6, 5, 5, 2); // door right
               worldMaps['interior_blacksmith'].exits = [{ pos: { x: 7, y: 4 }, targetMapId: mapId, targetPos: { x: d.x + 1, y: d.y } }];
-              exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'interior_blacksmith', targetPos: { x: 6, y: 4 } }); // Spawn just inside door
+              // IMPORTANT: Keep existing cellar link
+              exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'interior_blacksmith', targetPos: { x: 6, y: 4 } }); 
 
-              // Town Hall (North Center) - Big
-              d = buildHouse(8, 1, 5, 4, 2, 3);
-              worldMaps['interior_townhall'].exits = [{ pos: { x: 4, y: 7 }, targetMapId: mapId, targetPos: { x: d.x, y: d.y + 1 } }];
-              exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'interior_townhall', targetPos: { x: 4, y: 6 } });
-
-              // Shop (South East)
-              d = buildHouse(12, 10, 6, 5, 0, 2); // door left
+              // Shop (Bottom Right)
+              d = buildHouse(13, 9, 6, 5, 0, 2); // door left
               worldMaps['interior_shop'].exits = [{ pos: { x: 0, y: 4 }, targetMapId: mapId, targetPos: { x: d.x - 1, y: d.y } }];
-              exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'interior_shop', targetPos: { x: 1, y: 4 } }); // Spawn just inside door
+              exits.push({ pos: { x: d.x, y: d.y }, targetMapId: 'interior_shop', targetPos: { x: 1, y: 4 } }); 
 
+              // Shrine
+              tiles[7][10] = 'SHRINE'; // Intersection
               entities.push({ id: `wp_${wx}_${wy}`, name: `${specialTown.name} Waypoint`, type: 'OBJECT', subType: 'WAYPOINT', symbol: '♦', color: 'cyan', pos: { x: 10, y: 7 } });
 
           } else {
