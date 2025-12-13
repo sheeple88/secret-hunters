@@ -293,6 +293,13 @@ export const ASSETS = {
     <rect x="2" y="2" width="12" height="12" fill="none" stroke="#713f12" stroke-width="2"/>
     <path d="M2,2 L14,14 M14,2 L2,14" stroke="#713f12" stroke-width="1"/>
   `),
+  MOB_SPAWNER: createAsset(`
+    <rect x="2" y="2" width="12" height="12" fill="#262626" stroke="#525252" stroke-width="1"/>
+    <path d="M4,2 L4,14 M8,2 L8,14 M12,2 L12,14" stroke="#737373" stroke-width="1"/>
+    <path d="M2,6 L14,6 M2,10 L14,10" stroke="#737373" stroke-width="1"/>
+    <circle cx="6" cy="7" r="1.5" fill="#dc2626" class="animate-pulse"/>
+    <circle cx="10" cy="7" r="1.5" fill="#dc2626" class="animate-pulse"/>
+  `),
 
   // Weapons
   WEAPON_SWORD: createAsset(`<path d="M6,14 L4,12 L10,6 L12,8 Z" fill="#9ca3af"/><path d="M10,6 L14,2" stroke="#e5e7eb" stroke-width="2"/><circle cx="5" cy="13" r="1" fill="#4b5563"/>`),

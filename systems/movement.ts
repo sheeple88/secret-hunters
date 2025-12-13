@@ -3,7 +3,7 @@ import { GameState, Position, AnimationType, LogEntry, Item, GameMap } from '../
 import { MAPS, ITEMS, WEAPON_TEMPLATES, uid, calculateSkillLevel } from '../constants';
 import { playSound } from '../services/audioService';
 import { generateLoot } from '../services/itemService';
-import { processEnemyTurns } from './ai';
+import { processEnemyTurns, processSpawners } from './ai';
 
 const BLOCKED_TILES = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'SHRINE', 'VOID', 'WATER', 'CACTUS', 'DEEP_WATER', 'OBSIDIAN', 'CRACKED_WALL', 'ROOF'];
 const TREE_TYPES = ['TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE'];
@@ -240,7 +240,8 @@ export const handlePlayerMove = (
            };
        }
 
-       if (entity.type === 'ENEMY') {
+       // Attack Enemies or Destroy Spawners
+       if (entity.type === 'ENEMY' || entity.subType === 'MOB_SPAWNER') {
            // Combat
            playerDidAction = true;
            playSound('ATTACK');
@@ -266,18 +267,46 @@ export const handlePlayerMove = (
            if (newEnemyHp <= 0) {
                playSound('KILL');
                nextMapEntities = nextMapEntities.filter(e => e.id !== entity!.id);
-               combatLogs.push({ id: uid(), message: `${entity!.name} died!`, type: 'COMBAT', timestamp: Date.now() });
-               newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
+               combatLogs.push({ id: uid(), message: `${entity!.name} destroyed!`, type: 'COMBAT', timestamp: Date.now() });
                
-               newStats.xp += Math.floor((entity.level || 1) * 10);
-               newStats.gold += Math.floor((entity.level || 1) * (2 + Math.random() * 5));
+               if (entity.type === 'ENEMY') newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
                
-               const loot = generateLoot(entity.level || 1, entity.name);
-               if (loot) {
-                   const existing = newInventory.find(i => i.id === loot.id); 
-                   newInventory.push(loot); 
-                   combatLogs.push({ id: uid(), message: `Looted: ${loot.name}`, type: 'LOOT', timestamp: Date.now() });
+               // XP and Gold Calculation
+               // If spawned from cage, rewards are 1/4
+               let xpGain = Math.floor((entity.level || 1) * 10);
+               let goldGain = Math.floor((entity.level || 1) * (2 + Math.random() * 5));
+               
+               if (entity.isSpawned) {
+                   xpGain = Math.max(1, Math.floor(xpGain / 4));
+                   goldGain = Math.max(0, Math.floor(goldGain / 4));
                }
+               
+               if (entity.subType === 'MOB_SPAWNER') {
+                   // Spawners give decent XP for destroying
+                   xpGain = 50;
+                   goldGain = 0;
+               }
+
+               newStats.xp += xpGain;
+               newStats.gold += goldGain;
+               
+               // Drop Calculation
+               // If spawned, drop chance is reduced to 25% of normal
+               if (Math.random() < (entity.isSpawned ? 0.25 : 1.0)) {
+                   const loot = generateLoot(entity.level || 1, entity.name);
+                   if (loot) {
+                       const existing = newInventory.find(i => i.id === loot.id); 
+                       newInventory.push(loot); 
+                       combatLogs.push({ id: uid(), message: `Looted: ${loot.name}`, type: 'LOOT', timestamp: Date.now() });
+                   }
+               }
+               
+               // Spawner always drops scraps
+               if (entity.subType === 'MOB_SPAWNER') {
+                   newInventory.push({...ITEMS['iron_ore'], id: uid()});
+                   combatLogs.push({ id: uid(), message: `Looted: Iron Ore`, type: 'LOOT', timestamp: Date.now() });
+               }
+
                if (!newBestiary.includes(entity.name)) newBestiary.push(entity.name);
            } else {
                const idx = nextMapEntities.findIndex(e => e.id === entity!.id);
@@ -311,7 +340,11 @@ export const handlePlayerMove = (
    }
 
    // --- 4. Enemy Turns ---
+   // Also handle Spawner Logic
    if (playerDidAction) {
+       // Process Spawners first
+       nextMapEntities = processSpawners(nextMapEntities, targetMap, nextPos);
+
        const aiMapState = { ...targetMap, entities: nextMapEntities };
        const { entities: updatedEntities, damageToPlayer, logs: enemyLogs, anims: enemyAnims, numbers: enemyNumbers } 
           = processEnemyTurns({ ...prev, playerPos: nextPos }, aiMapState, nextPos);
@@ -331,7 +364,7 @@ export const handlePlayerMove = (
    // --- 5. Final Updates ---
    const finalLogs = [...combatLogs, ...prev.logs].slice(0, 100);
    
-   // Explore
+   // Explore logic (same as before)
    const newExp = { ...prev.exploration };
    if (!newExp[nextMapId]) {
        if (targetMap.biome === 'INTERIOR') {
@@ -340,11 +373,8 @@ export const handlePlayerMove = (
            newExp[nextMapId] = Array(targetMap.height).fill(null).map(() => Array(targetMap.width).fill(0));
        }
    }
-   
-   // Simple Vision Radius
    let rad = 4;
    if (prev.equippedPerks.includes('vision_plus')) rad += 2;
-   
    const expGrid = newExp[nextMapId];
    if (expGrid && targetMap.biome !== 'INTERIOR') {
         for(let y = nextPos.y - rad; y <= nextPos.y + rad; y++) {

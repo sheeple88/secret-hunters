@@ -1,5 +1,5 @@
 
-import { GameMap, TileType, Entity } from '../types';
+import { GameMap, TileType, Entity, Secret } from '../types';
 import { uid } from './mapUtils';
 import { generateHavensRest } from './maps/havensRest';
 
@@ -147,6 +147,33 @@ export const generateMap = (id: string, name: string, biome: string, difficulty:
                 attackRange
             });
         }
+
+        // Generate Mob Spawners (5% Chance + Difficulty bonus)
+        // More likely in Snow/Desert
+        if (Math.random() < 0.05 + (difficulty * 0.005)) {
+             let rx = Math.floor(Math.random() * (width - 4)) + 2;
+             let ry = Math.floor(Math.random() * (height - 4)) + 2;
+             if (!['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'WATER', 'LAVA'].includes(tiles[ry][rx])) {
+                 const spawnerLevel = Math.max(1, difficulty);
+                 const hp = 50 + (spawnerLevel * 10);
+                 const type = biome === 'SNOW' ? 'Ice Golem' : biome === 'DESERT' ? 'Scorpion' : 'Spider';
+                 
+                 entities.push({
+                     id: `spawner_${id}_${uid()}`,
+                     name: `${type} Cage`,
+                     type: 'OBJECT',
+                     subType: 'MOB_SPAWNER',
+                     symbol: '#',
+                     color: 'darkred',
+                     pos: {x: rx, y: ry},
+                     hp,
+                     maxHp: hp,
+                     level: spawnerLevel,
+                     spawnType: type,
+                     lastSpawnTime: 0
+                 });
+             }
+        }
     }
 
     if (Math.random() > 0.6 && !isTown) {
@@ -160,136 +187,51 @@ export const generateMap = (id: string, name: string, biome: string, difficulty:
     return { id, name, width, height, tiles, entities, neighbors: {}, exits: [], difficulty, biome, isTown };
 };
 
-export const createWorld = (secretsData: any[]) => {
+export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
     const maps: Record<string, GameMap> = {};
-    const worldSize = 20;
     
-    const townLocations: string[] = [];
-    while(townLocations.length < 20) {
-        const x = Math.floor(Math.random() * worldSize);
-        const y = Math.floor(Math.random() * worldSize);
-        const key = `map_${x}_${y}`;
-        if (!townLocations.includes(key) && key !== 'map_10_10') townLocations.push(key);
-    }
-    townLocations.push('map_10_10');
+    // Generate Town (Center)
+    // Map ID for town is usually fixed 'map_10_10'
+    generateHavensRest(maps);
 
-    // 1. Generate Maps
-    for(let x=0; x<worldSize; x++) {
-        for(let y=0; y<worldSize; y++) {
+    // Generate Wilderness
+    const WORLD_WIDTH = 20;
+    const WORLD_HEIGHT = 20;
+
+    for (let y = 0; y < WORLD_HEIGHT; y++) {
+        for (let x = 0; x < WORLD_WIDTH; x++) {
             const id = `map_${x}_${y}`;
-            let biome = 'GRASS';
-            if (y > 15) biome = 'DESERT'; // South is Desert
-            if (y < 5) biome = 'SNOW';    // North is Snow
-            
-            const isTown = townLocations.includes(id);
-            // Difficulty based on distance from Start (10, 10)
-            const difficulty = Math.floor(Math.abs(x-10) + Math.abs(y-10));
-            
-            let name = `Zone ${x}-${y}`;
-            if (isTown) {
-                const p = TOWN_NAMES_PREFIX[Math.floor(Math.random() * TOWN_NAMES_PREFIX.length)];
-                const s = TOWN_NAMES_SUFFIX[Math.floor(Math.random() * TOWN_NAMES_SUFFIX.length)];
-                name = `${p}${s}`;
-            }
+            if (maps[id]) continue; // Skip existing (Town)
 
-            maps[id] = generateMap(id, name, biome, difficulty, isTown);
+            // Determine Biome based on coordinates (simple gradient)
+            let biome = 'GRASS';
+            if (y < 5) biome = 'SNOW';
+            else if (y > 15) biome = 'DESERT';
+            
+            // Difficulty increases from center (10, 10)
+            const dist = Math.abs(x - 10) + Math.abs(y - 10);
+            const difficulty = Math.floor(dist / 2);
+
+            // Name generation
+            const prefix = TOWN_NAMES_PREFIX[Math.floor(Math.random() * TOWN_NAMES_PREFIX.length)];
+            const suffix = TOWN_NAMES_SUFFIX[Math.floor(Math.random() * TOWN_NAMES_SUFFIX.length)];
+            const name = biome === 'GRASS' ? `${prefix}${suffix}` : biome === 'SNOW' ? `Frozen ${suffix}` : `Burning ${suffix}`;
+
+            maps[id] = generateMap(id, name, biome, difficulty, false);
         }
     }
 
-    // 2. Link Neighbors AND Enforce Gateways
-    for(let x=0; x<worldSize; x++) {
-        for(let y=0; y<worldSize; y++) {
+    // Link Neighbors
+    for (let y = 0; y < WORLD_HEIGHT; y++) {
+        for (let x = 0; x < WORLD_WIDTH; x++) {
             const id = `map_${x}_${y}`;
             const map = maps[id];
-            
-            if (y > 0) map.neighbors.UP = `map_${x}_${y-1}`;
-            if (y < worldSize - 1) map.neighbors.DOWN = `map_${x}_${y+1}`;
-            if (x > 0) map.neighbors.LEFT = `map_${x-1}_${y}`;
-            if (x < worldSize - 1) map.neighbors.RIGHT = `map_${x+1}_${y}`;
+            if (!map) continue;
 
-            // --- BORDER LOGIC ---
-            const w = map.width;
-            const h = map.height;
-            const centerY = Math.floor(h / 2); 
-            const centerX = Math.floor(w / 2); 
-            const gateRadius = 2; // Width of gate (2 radius = 5 tiles wide)
-            const biomeTile = map.biome === 'SNOW' ? 'SNOW' : map.biome === 'DESERT' ? 'SAND' : 'GRASS';
-
-            // Top Edge (Uses Center X)
-            if (map.neighbors.UP) {
-                for(let i=0; i<w; i++) {
-                    map.tiles[0][i] = biomeTile; // Open Border
-                    if (Math.abs(i - centerX) <= gateRadius) map.tiles[0][i] = 'DIRT_PATH';
-                }
-            } else {
-                for(let i=0; i<w; i++) map.tiles[0][i] = 'WALL'; // World Edge
-            }
-
-            // Bottom Edge (Uses Center X)
-            if (map.neighbors.DOWN) {
-                for(let i=0; i<w; i++) {
-                    map.tiles[h-1][i] = biomeTile; // Open Border
-                    if (Math.abs(i - centerX) <= gateRadius) map.tiles[h-1][i] = 'DIRT_PATH';
-                }
-            } else {
-                for(let i=0; i<w; i++) map.tiles[h-1][i] = 'WALL'; // World Edge
-            }
-
-            // Left Edge (Uses Center Y)
-            if (map.neighbors.LEFT) {
-                for(let i=0; i<h; i++) {
-                    map.tiles[i][0] = biomeTile; // Open Border
-                    if (Math.abs(i - centerY) <= gateRadius) map.tiles[i][0] = 'DIRT_PATH';
-                }
-            } else {
-                for(let i=0; i<h; i++) map.tiles[i][0] = 'WALL'; // World Edge
-            }
-
-            // Right Edge (Uses Center Y)
-            if (map.neighbors.RIGHT) {
-                for(let i=0; i<h; i++) {
-                     map.tiles[i][w-1] = biomeTile; // Open Border
-                    if (Math.abs(i - centerY) <= gateRadius) map.tiles[i][w-1] = 'DIRT_PATH';
-                }
-            } else {
-                for(let i=0; i<h; i++) map.tiles[i][w-1] = 'WALL'; // World Edge
-            }
-        }
-    }
-
-    // --- MANUALLY OVERRIDE STARTER TOWN (map_10_10) ---
-    // Use the dedicated layout file
-    generateHavensRest(maps);
-    
-    // 3. Generate Procedural Secrets (Existing logic preserved)
-    const formatNumber = (n: number) => Math.floor(n).toLocaleString();
-    
-    for(let i=0; i < 1000; i++) {
-        const type = Math.random();
-        if (type > 0.6) {
-             const targetGold = Math.floor(Math.random() * 1000000) + 1000;
-             secretsData.push({
-                 id: `sec_gold_${i}`,
-                 title: `Hoarder ${i}`,
-                 description: `Amass ${formatNumber(targetGold)} Gold.`,
-                 hint: 'Greed is infinite.',
-                 statBonus: { gold: 10 },
-                 unlocked: false,
-                 perkId: 'midas_touch',
-                 condition: (gs: any) => gs.stats.gold >= targetGold
-             });
-        } else if (type > 0.3) {
-             const targetLevel = Math.floor(Math.random() * 500) + 10;
-             secretsData.push({
-                 id: `sec_lvl_${i}`,
-                 title: `Ascension ${i}`,
-                 description: `Reach Level ${targetLevel}.`,
-                 hint: 'Power grows.',
-                 statBonus: { str: 1, int: 1, dex: 1 },
-                 unlocked: false,
-                 perkId: 'titan_grip',
-                 condition: (gs: any) => gs.stats.level >= targetLevel
-             });
+            if (y > 0) map.neighbors.UP = `map_${x}_${y - 1}`;
+            if (y < WORLD_HEIGHT - 1) map.neighbors.DOWN = `map_${x}_${y + 1}`;
+            if (x > 0) map.neighbors.LEFT = `map_${x - 1}_${y}`;
+            if (x < WORLD_WIDTH - 1) map.neighbors.RIGHT = `map_${x + 1}_${y}`;
         }
     }
 

@@ -112,7 +112,7 @@ export interface Entity {
   id: string;
   name: string;
   type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR'; 
+  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER'; 
   symbol: string; // Emoji or char
   color: string;
   pos: Position;
@@ -130,6 +130,11 @@ export interface Entity {
   aggroRange?: number; // How far they can see player
   attackRange?: number; // How far they can hit (1 for melee)
   magicType?: MagicType;
+  
+  // Spawner Props
+  isSpawned?: boolean; // If true, reduced XP/Loot
+  lastSpawnTime?: number; // Timestamp
+  spawnType?: string; // Monster name base
 }
 
 export type TileType = 'GRASS' | 'WALL' | 'WATER' | 'FLOOR' | 'TREE' | 'OAK_TREE' | 'BIRCH_TREE' | 'PINE_TREE' | 'STUMP' | 'ROCK' | 'SHRINE' | 'PLANK' | 'DOOR' | 'LAVA' | 'VOID' | 'SAND' | 'MUD' | 'FLOWER' | 'WATERFALL' | 'SNOW' | 'ICE' | 'CACTUS' | 'STONE_BRICK' | 'GRAVESTONE' | 'DEEP_WATER' | 'BONES' | 'OBSIDIAN' | 'DIRT_PATH' | 'STAIRS_UP' | 'STAIRS_DOWN' | 'CRACKED_WALL' | 'ROOF';

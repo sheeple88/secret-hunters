@@ -70,6 +70,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       if (entity.subType === 'CRATE') sprite = ASSETS.CRATE;
       if (entity.subType === 'LOCKED_DOOR') sprite = ASSETS.LOCKED_DOOR;
       if (entity.subType === 'DOOR') sprite = ASSETS.DOOR;
+      if (entity.subType === 'MOB_SPAWNER') sprite = ASSETS.MOB_SPAWNER;
   }
   else if (entity.type === 'COLLECTIBLE') {
       sprite = ASSETS.RELIC;
@@ -189,7 +190,8 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
             entity.type === 'ENEMY' && "animate-pulse-slow",
             entity.name.includes('Bat') && "animate-bounce",
             entity.name.includes('Ghost') && "opacity-80 animate-pulse",
-            entity.type === 'COLLECTIBLE' && "animate-bounce"
+            entity.type === 'COLLECTIBLE' && "animate-bounce",
+            entity.subType === 'MOB_SPAWNER' && "animate-pulse"
           )}
           style={{
             imageRendering: 'pixelated',
@@ -208,7 +210,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
         )}
         
         {/* HP Bar for enemies */}
-        {entity.type === 'ENEMY' && entity.hp !== undefined && entity.maxHp && (
+        {(entity.type === 'ENEMY' || (entity.subType === 'MOB_SPAWNER' && entity.hp !== undefined && entity.hp < (entity.maxHp || 100))) && entity.hp !== undefined && entity.maxHp && (
             <div className="absolute -top-1 left-1 w-6 h-1 bg-red-900 border border-black/50 z-40">
                 <div 
                     className="h-full bg-red-500" 
@@ -238,7 +240,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
         )}
 
         {/* Quest/Interaction Indicator */}
-        {(entity.type === 'NPC' || (entity.type === 'OBJECT' && entity.subType !== 'PRESSURE_PLATE' && entity.subType !== 'PUSH_BLOCK' && entity.subType !== 'DOOR')) && (
+        {(entity.type === 'NPC' || (entity.type === 'OBJECT' && entity.subType !== 'PRESSURE_PLATE' && entity.subType !== 'PUSH_BLOCK' && entity.subType !== 'DOOR' && entity.subType !== 'MOB_SPAWNER')) && (
            <div className={`absolute -top-3 left-1/2 -translate-x-1/2 animate-bounce font-bold z-50 ${entity.questId ? 'text-yellow-400 text-lg' : 'text-stone-300 text-[10px]'}`}>
              {entity.questId ? '!' : entity.subType === 'LOCKED_DOOR' || entity.subType === 'LOCKED_CHEST' ? '🔒' : '?'}
            </div>
