@@ -56,12 +56,19 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
   else if (entity.type === 'OBJECT') {
       if (entity.subType === 'CHEST') sprite = ASSETS.CHEST;
       if (entity.subType === 'LOCKED_CHEST') sprite = ASSETS.LOCKED_CHEST;
+      if (entity.subType === 'BOSS_CHEST') sprite = ASSETS.BOSS_CHEST;
+      if (entity.subType === 'OPEN_CHEST') sprite = ASSETS.OPEN_CHEST;
       if (entity.subType === 'BED') sprite = ASSETS.BED;
       if (entity.subType === 'WAYPOINT') sprite = isActiveWaypoint ? ASSETS.WAYPOINT_ACTIVE : ASSETS.WAYPOINT;
       if (entity.subType === 'SIGNPOST') sprite = ASSETS.SIGNPOST;
       if (entity.subType === 'ANVIL') sprite = ASSETS.ANVIL;
       if (entity.subType === 'WORKBENCH') sprite = ASSETS.WORKBENCH;
       if (entity.subType === 'ALCHEMY_TABLE') sprite = ASSETS.ALCHEMY_TABLE;
+      if (entity.subType === 'CAMPFIRE') sprite = ASSETS.CAMPFIRE;
+      if (entity.subType === 'FISHING_SPOT') {
+          sprite = ASSETS.FISHING_SPOT;
+          zIndex = 10; // Ripple below entities
+      }
       if (entity.subType === 'PRESSURE_PLATE') {
           sprite = ASSETS.PRESSURE_PLATE;
           zIndex = 10; // Below player
@@ -74,6 +81,12 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
   }
   else if (entity.type === 'COLLECTIBLE') {
       sprite = ASSETS.RELIC;
+  }
+  else if (entity.type === 'ITEM_DROP') {
+      // Basic item drop handling
+      if (entity.loot === 'boss_key') sprite = ASSETS.KEY_DROP;
+      else sprite = ASSETS.RELIC; // Fallback
+      zIndex = 15; // Floor item
   }
 
   // Weapon Asset Selection
@@ -115,11 +128,13 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
   }
 
   const style: React.CSSProperties = {
-    // Use translate3d for GPU acceleration
-    transform: `translate3d(${x * 2}rem, ${y * 2}rem, 0)`,
+    // Use translate3d for GPU acceleration - USING PIXELS
+    transform: `translate3d(${x * 32}px, ${y * 32}px, 0)`,
     transition: 'transform 0.2s cubic-bezier(0.2, 0, 0.2, 1)',
     zIndex: zIndex,
-    willChange: 'transform'
+    willChange: 'transform',
+    width: '32px', // Explicit size
+    height: '32px'
   };
 
   const isFlipped = entity.facing === 'LEFT';
@@ -163,14 +178,16 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       pointerEvents: 'none'
   };
 
+  const isBoss = entity.subType === 'BOSS';
+
   return (
     <div 
-      className="absolute top-0 left-0 w-8 h-8 flex items-center justify-center pointer-events-none"
+      className="absolute top-0 left-0 flex items-center justify-center pointer-events-none"
       style={style}
     >
-      <div className={clsx("relative w-8 h-8", isPlayer && "z-30", animClass)}>
+      <div className={clsx("relative w-full h-full", isPlayer && "z-30", animClass, isBoss && "scale-125")}>
         {/* Shadow */}
-        {entity.subType !== 'PRESSURE_PLATE' && <div className="absolute bottom-1 left-2 w-4 h-1 bg-black/40 rounded-full blur-[1px]" />}
+        {entity.subType !== 'PRESSURE_PLATE' && entity.subType !== 'FISHING_SPOT' && entity.type !== 'ITEM_DROP' && <div className="absolute bottom-1 left-2 w-4 h-1 bg-black/40 rounded-full blur-[1px]" />}
         
         {/* Name Tag for Doors/Important NPCs */}
         {(entity.type === 'NPC' || (entity.type === 'OBJECT' && entity.subType === 'DOOR')) && (
@@ -191,12 +208,13 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
             entity.name.includes('Bat') && "animate-bounce",
             entity.name.includes('Ghost') && "opacity-80 animate-pulse",
             entity.type === 'COLLECTIBLE' && "animate-bounce",
+            entity.type === 'ITEM_DROP' && "animate-bounce",
             entity.subType === 'MOB_SPAWNER' && "animate-pulse"
           )}
           style={{
             imageRendering: 'pixelated',
             transform: isFlipped ? 'scaleX(-1)' : 'scaleX(1)',
-            filter: isPlayer ? 'drop-shadow(0 0 2px rgba(255,255,255,0.3))' : undefined,
+            filter: isPlayer ? 'drop-shadow(0 0 2px rgba(255,255,255,0.3))' : isBoss ? 'drop-shadow(0 0 4px rgba(220, 38, 38, 0.5))' : undefined,
             zIndex: 30
           }}
           alt={entity.name}
@@ -209,6 +227,15 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
             </div>
         )}
         
+        {/* Enemy Level Badge */}
+        {entity.type === 'ENEMY' && entity.level && (
+            <div className="absolute -top-4 right-0 z-50 pointer-events-none">
+                <div className={`bg-red-950/90 border ${isBoss ? 'border-amber-500 text-amber-200' : 'border-red-800 text-red-100'} text-[8px] px-1 rounded-sm shadow-sm leading-none flex items-center justify-center min-w-[14px]`}>
+                   {isBoss ? 'BOSS' : entity.level}
+                </div>
+            </div>
+        )}
+
         {/* HP Bar for enemies */}
         {(entity.type === 'ENEMY' || (entity.subType === 'MOB_SPAWNER' && entity.hp !== undefined && entity.hp < (entity.maxHp || 100))) && entity.hp !== undefined && entity.maxHp && (
             <div className="absolute -top-1 left-1 w-6 h-1 bg-red-900 border border-black/50 z-40">
@@ -240,9 +267,9 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
         )}
 
         {/* Quest/Interaction Indicator */}
-        {(entity.type === 'NPC' || (entity.type === 'OBJECT' && entity.subType !== 'PRESSURE_PLATE' && entity.subType !== 'PUSH_BLOCK' && entity.subType !== 'DOOR' && entity.subType !== 'MOB_SPAWNER')) && (
+        {(entity.type === 'NPC' || (entity.type === 'OBJECT' && entity.subType !== 'PRESSURE_PLATE' && entity.subType !== 'PUSH_BLOCK' && entity.subType !== 'DOOR' && entity.subType !== 'MOB_SPAWNER' && entity.subType !== 'OPEN_CHEST' && entity.subType !== 'FISHING_SPOT')) && (
            <div className={`absolute -top-3 left-1/2 -translate-x-1/2 animate-bounce font-bold z-50 ${entity.questId ? 'text-yellow-400 text-lg' : 'text-stone-300 text-[10px]'}`}>
-             {entity.questId ? '!' : entity.subType === 'LOCKED_DOOR' || entity.subType === 'LOCKED_CHEST' ? '🔒' : '?'}
+             {entity.questId ? '!' : entity.subType === 'LOCKED_DOOR' || entity.subType === 'LOCKED_CHEST' || entity.subType === 'BOSS_CHEST' ? '🔒' : '?'}
            </div>
         )}
       </div>

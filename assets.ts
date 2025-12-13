@@ -154,6 +154,26 @@ export const ASSETS = {
     <rect x="2" y="5" width="12" height="2" fill="#292524"/>
     <rect x="2" y="2" width="12" height="2" fill="#1c1917"/>
   `),
+  
+  // Dungeon Entrances
+  ENTRANCE_CRYPT: createAsset(`
+    <rect width="16" height="16" fill="#292524"/>
+    <path d="M2,16 L2,6 Q8,0 14,6 L14,16" fill="#44403c"/>
+    <path d="M4,16 L4,8 Q8,4 12,8 L12,16" fill="#000"/>
+    <rect x="7" y="2" width="2" height="3" fill="#57534e"/>
+    <rect x="6" y="3" width="4" height="1" fill="#57534e"/>
+  `),
+  ENTRANCE_CAVE: createAsset(`
+    <rect width="16" height="16" fill="#57534e"/>
+    <path d="M2,16 Q4,4 8,4 Q12,4 14,16" fill="#1c1917"/>
+    <path d="M0,16 L4,8 L2,4 L6,2 L10,2 L14,6 L16,10 L16,16" fill="#44403c" opacity="0.5"/>
+  `),
+  ENTRANCE_MAGMA: createAsset(`
+    <rect width="16" height="16" fill="#450a0a"/>
+    <path d="M1,16 L4,4 L12,4 L15,16" fill="#7f1d1d"/>
+    <path d="M5,16 L6,8 L10,8 L11,16" fill="#b91c1c"/>
+    <path d="M6,16 L8,10 L10,16" fill="#fca5a5" opacity="0.5" class="animate-pulse"/>
+  `),
 
   // Objects (Overlays)
   TREE: createAsset(`
@@ -219,6 +239,18 @@ export const ASSETS = {
     <rect x="6" y="7" width="4" height="4" fill="#fbbf24"/>
     <circle cx="8" cy="9" r="1" fill="#000"/>
   `),
+  BOSS_CHEST: createAsset(`
+    <rect x="1" y="4" width="14" height="12" fill="#27272a" stroke="#7f1d1d" stroke-width="2"/>
+    <rect x="1" y="8" width="14" height="1" fill="#7f1d1d" opacity="0.5"/>
+    <path d="M5,4 L8,8 L11,4" fill="#dc2626"/>
+    <circle cx="8" cy="10" r="2" fill="#fef08a" class="animate-pulse"/>
+    <circle cx="8" cy="10" r="1" fill="#000"/>
+  `),
+  OPEN_CHEST: createAsset(`
+    <rect x="2" y="8" width="12" height="7" fill="#422006"/>
+    <path d="M2,8 L14,8 L12,4 L4,4 Z" fill="#713f12" opacity="0.7"/>
+    <rect x="2" y="8" width="12" height="7" fill="none" stroke="#a16207" stroke-width="1"/>
+  `),
   BED: createAsset(`
     <rect x="2" y="4" width="12" height="11" fill="#dc2626"/>
     <rect x="2" y="4" width="12" height="3" fill="#fef2f2"/>
@@ -274,10 +306,28 @@ export const ASSETS = {
     <rect x="8" y="2" width="2" height="4" fill="#2196F3" opacity="0.8"/>
     <circle cx="12" cy="5" r="1.5" fill="#4CAF50" opacity="0.8"/>
   `),
+  CAMPFIRE: createAsset(`
+    <rect x="3" y="10" width="10" height="4" fill="#57534e"/>
+    <rect x="2" y="12" width="12" height="2" fill="#292524"/>
+    <rect x="5" y="8" width="2" height="4" fill="#92400e"/>
+    <rect x="9" y="8" width="2" height="4" fill="#92400e" transform="rotate(45 10 10)"/>
+    <circle cx="8" cy="7" r="3" fill="#f97316" opacity="0.8"/>
+    <circle cx="8" cy="7" r="1.5" fill="#fef08a" class="animate-pulse"/>
+  `),
+  FISHING_SPOT: createAsset(`
+    <circle cx="8" cy="8" r="6" stroke="#93c5fd" stroke-width="1" fill="none" class="animate-ping" opacity="0.5"/>
+    <circle cx="8" cy="8" r="3" fill="#60a5fa" opacity="0.3"/>
+    <path d="M6,8 Q8,6 10,8" stroke="#dbeafe" stroke-width="1" fill="none"/>
+  `),
   RELIC: createAsset(`
     <circle cx="8" cy="8" r="4" fill="#fbbf24"/>
     <circle cx="8" cy="8" r="2" fill="#fef3c7" opacity="0.8"/>
     <path d="M8,2 L9,6 L14,8 L9,10 L8,14 L7,10 L2,8 L7,6 Z" fill="#f59e0b" opacity="0.5"/>
+  `),
+  KEY_DROP: createAsset(`
+    <circle cx="10" cy="6" r="3" fill="#facc15" stroke="#a16207" stroke-width="1"/>
+    <path d="M8,8 L4,12 L2,10 L4,8 Z" fill="#facc15"/>
+    <path d="M4,12 L5,13 M3,11 L4,12" stroke="#a16207" stroke-width="1"/>
   `),
   PRESSURE_PLATE: createAsset(`
     <rect x="3" y="3" width="10" height="10" fill="#57534e"/>

@@ -2,16 +2,24 @@
 // Simple retro synth using Web Audio API
 let audioCtx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
+let currentVolume = 0.3;
 
 const initAudio = () => {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.3; // Default volume
+        masterGain.gain.value = currentVolume;
         masterGain.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
+    }
+};
+
+export const setMasterVolume = (val: number) => {
+    currentVolume = Math.max(0, Math.min(1, val));
+    if (masterGain) {
+        masterGain.gain.value = currentVolume;
     }
 };
 

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { BookOpen, X } from 'lucide-react';
-import { GameState } from '../../types';
+import { GameState, Skill } from '../../types';
 import { formatNumber } from '../../constants';
 
 interface SkillsModalProps {
@@ -18,7 +18,7 @@ export const SkillsModal: React.FC<SkillsModalProps> = ({ gameState, onClose }) 
                 <button onClick={onClose}><X className="w-6 h-6 hover:text-red-400"/></button>
             </div>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                {Object.values(gameState.skills).map(skill => (
+                {(Object.values(gameState.skills) as Skill[]).map(skill => (
                     <div key={skill.name} className="bg-stone-950 p-3 rounded border border-stone-800">
                         <div className="flex justify-between mb-1">
                             <span className="font-bold text-stone-300">{skill.name}</span>

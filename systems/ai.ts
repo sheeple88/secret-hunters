@@ -1,6 +1,6 @@
 
 import { GameState, GameMap, Position, Entity, LogEntry, AnimationType } from '../types';
-import { uid } from '../constants';
+import { uid, SCALE_FACTOR, MONSTER_TEMPLATES } from '../constants';
 import { playSound } from '../services/audioService';
 
 const BLOCKED_TILES = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'SHRINE', 'VOID', 'WATER', 'CACTUS', 'DEEP_WATER', 'OBSIDIAN', 'CRACKED_WALL', 'ROOF'];
@@ -81,7 +81,10 @@ export const processSpawners = (
             newEntities[index] = { ...entity, lastSpawnTime: now, lastSpawnStep: currentStep };
             
             const level = entity.level || 1;
-            const hp = Math.floor(20 + level * 8);
+            
+            // Base Stat Scaling for Spawns
+            const template = MONSTER_TEMPLATES[type] || MONSTER_TEMPLATES['Slime'];
+            const hp = Math.floor(template.baseHp * Math.pow(SCALE_FACTOR, level));
 
             newEntities.push({
                 id: `spawned_${uid()}`,
@@ -152,7 +155,27 @@ export const processEnemyTurns = (
 
         if (canAttack) {
             playSound('HIT');
-            const eDmg = Math.max(1, Math.floor((entity.level || 1) * 1.2) + 1);
+            
+            // --- ENEMY DAMAGE CALCULATION ---
+            // 1. Identify Base Type from Name (e.g. "Angry Rat" -> "Rat")
+            let baseName = entity.name.split(' ').pop() || 'Slime'; // Basic heuristics
+            if (['King', 'Lord', 'Mother', 'Dragon', 'Beholder', 'Lich'].some(k => entity.name.includes(k))) {
+                // Keep full name for bosses if mapped
+                if (MONSTER_TEMPLATES[entity.name]) baseName = entity.name;
+                // Otherwise try finding partial match in keys
+                else {
+                    const match = Object.keys(MONSTER_TEMPLATES).find(k => entity.name.includes(k));
+                    if (match) baseName = match;
+                }
+            }
+            
+            const template = MONSTER_TEMPLATES[baseName] || MONSTER_TEMPLATES['Slime'];
+            const level = entity.level || 1;
+            
+            // Formula: BaseDamage * (1.15 ^ Level)
+            // Minimum 1 damage
+            const eDmg = Math.max(1, Math.floor(template.baseDmg * Math.pow(SCALE_FACTOR, level)));
+            
             damageToPlayer += eDmg;
             anims[entity.id] = range > 1 ? 'SHOOT' : 'ATTACK';
             anims['player'] = 'HURT';

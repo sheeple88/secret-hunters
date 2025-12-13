@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { GameState, Stats, Item, Recipe } from '../types';
 import { Save } from 'lucide-react';
@@ -40,6 +41,7 @@ interface GameHUDProps {
   formatTime: (t: number) => string;
   onStatIncrease: (stat: keyof Stats) => void;
   onAutoConfigChange: (enabled: boolean, allocation: any) => void;
+  onResetStats: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -62,7 +64,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onDialogueClose,
   formatTime,
   onStatIncrease,
-  onAutoConfigChange
+  onAutoConfigChange,
+  onResetStats
 }) => {
 
   return (
@@ -98,6 +101,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onConsume={onConsume}
             onStatIncrease={onStatIncrease}
             onAutoConfigChange={onAutoConfigChange}
+            onResetStats={onResetStats}
         />
       )}
       

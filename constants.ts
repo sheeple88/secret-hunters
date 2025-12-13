@@ -1,14 +1,15 @@
 
-import { GameMap, Secret, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType } from './types';
+import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType } from './types';
 import { ASSETS } from './assets';
 import { createWorld } from './systems/mapGenerator';
 import { uid } from './systems/mapUtils';
+import { ALL_SECRETS } from './data/secrets/index';
 
 export { uid };
 export { ASSETS };
 
 // --- INFINITE NUMBER SCALING ---
-const SUFFIXES = ["", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid", "Sxd", "Spd", "Ocd", "Nod", "Vg", "Uvg", "Dvg"];
+const SUFFIXES = ["", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid", "Sxd", "Spd", "Ocd", "Nod", "Vg", "Uvg", "Dvg", "Tvg", "Qavg", "Qivg", "Sxvg", "Spvg", "Ocvg", "Novg", "Tg"];
 
 export const formatNumber = (num: number): string => {
     if (num < 1000) return Math.floor(num).toString();
@@ -20,9 +21,13 @@ export const formatNumber = (num: number): string => {
     return scaled.toFixed(1) + suffix;
 };
 
-// Reduced scaling factor from 2.2 to 1.75 for easier leveling
-export const calculateXpForLevel = (level: number) => Math.floor(50 * Math.pow(level, 1.75));
-export const calculateSkillLevel = (xp: number) => Math.floor(Math.pow(xp / 10, 0.45)) + 1;
+// --- EXPONENTIAL SCALING FORMULAS ---
+// Base growth factor: 1.15 (Doubles roughly every 5 levels)
+export const SCALE_FACTOR = 1.15;
+
+export const calculateXpForLevel = (level: number) => Math.floor(100 * Math.pow(SCALE_FACTOR, level));
+// Inverse formula for skills to keep them somewhat aligned but slightly easier
+export const calculateSkillLevel = (xp: number) => Math.max(1, Math.floor(Math.log(Math.max(xp, 10) / 10) / Math.log(1.12)) + 1);
 
 export const INITIAL_STATS: Stats = {
   str: 5,
@@ -48,13 +53,16 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Carving: { name: 'Carving', level: 1, xp: 0 },
   Alchemy: { name: 'Alchemy', level: 1, xp: 0 },
   Fishing: { name: 'Fishing', level: 1, xp: 0 },
+  Cooking: { name: 'Cooking', level: 1, xp: 0 },
 };
 
 export const DEFAULT_RECIPES = [
     'potion_small', 
     'wood_plank', 
     'fishing_rod',
-    'iron_ingot'
+    'iron_ingot',
+    'campfire_kit',
+    'cooked_fish'
 ];
 
 export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string[] }> = {
@@ -66,9 +74,10 @@ export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string
     ACCESSORY: { names: ['Ring', 'Amulet', 'Talisman', 'Charm', 'Necklace', 'Band', 'Pendant', 'Brooch'], statBias: ['str', 'dex', 'int', 'regeneration'] },
 };
 
+// Exponential Loot Tiers
 export const LOOT_TIERS = Array.from({ length: 100 }, (_, i) => ({
     name: i === 0 ? 'Broken' : i === 1 ? 'Common' : i === 2 ? 'Uncommon' : i === 3 ? 'Rare' : i === 4 ? 'Epic' : i === 5 ? 'Legendary' : i === 6 ? 'Mythic' : i === 7 ? 'Godly' : i === 8 ? 'Divine' : i === 9 ? 'Cosmic' : `Tier ${i}`,
-    mult: 0.5 + (i * 0.5),
+    mult: Math.pow(SCALE_FACTOR, i * 5), // Massive scaling
     minLvl: i * 5
 }));
 
@@ -106,6 +115,57 @@ export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
     'Rod': { type: 'ROD', minDmg: 1, maxDmg: 3, critChance: 0.01, critMult: 1.2, range: 3 },
 };
 
+export interface MonsterStats {
+    baseHp: number;
+    baseDmg: number;
+    xpMod: number; // Multiplier for XP reward
+}
+
+// Base stats for monsters before level scaling
+export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
+    // Critters (Low threat)
+    'Slime': { baseHp: 15, baseDmg: 2, xpMod: 0.8 },
+    'Rat': { baseHp: 10, baseDmg: 3, xpMod: 0.8 },
+    'Bat': { baseHp: 8, baseDmg: 2, xpMod: 0.8 },
+    'Snake': { baseHp: 12, baseDmg: 4, xpMod: 1.0 },
+    'Spider': { baseHp: 15, baseDmg: 3, xpMod: 1.0 },
+    'Scorpion': { baseHp: 18, baseDmg: 5, xpMod: 1.2 },
+    
+    // Humanoids / Mid-tier
+    'Goblin': { baseHp: 25, baseDmg: 4, xpMod: 1.2 },
+    'Skeleton': { baseHp: 30, baseDmg: 5, xpMod: 1.3 },
+    'Zombie': { baseHp: 40, baseDmg: 3, xpMod: 1.3 },
+    'Bandit': { baseHp: 35, baseDmg: 6, xpMod: 1.4 },
+    'Cultist': { baseHp: 30, baseDmg: 8, xpMod: 1.5 },
+    'Ghost': { baseHp: 20, baseDmg: 6, xpMod: 1.5 }, // High damage, low HP
+    
+    // Beasts
+    'Wolf': { baseHp: 30, baseDmg: 6, xpMod: 1.3 },
+    'Bear': { baseHp: 60, baseDmg: 8, xpMod: 1.8 },
+    'Minotaur': { baseHp: 100, baseDmg: 12, xpMod: 2.5 },
+    
+    // High Tier / Magical
+    'Ice Golem': { baseHp: 80, baseDmg: 8, xpMod: 2.0 },
+    'Earth Golem': { baseHp: 100, baseDmg: 10, xpMod: 2.2 },
+    'Fire Elemental': { baseHp: 50, baseDmg: 15, xpMod: 2.0 },
+    'Specter': { baseHp: 40, baseDmg: 12, xpMod: 2.0 },
+    'Mimic': { baseHp: 60, baseDmg: 15, xpMod: 3.0 },
+    
+    // Boss Tier
+    'Knight': { baseHp: 120, baseDmg: 15, xpMod: 3.0 },
+    'Mage': { baseHp: 60, baseDmg: 20, xpMod: 3.0 },
+    'Lich': { baseHp: 150, baseDmg: 20, xpMod: 4.0 },
+    'Dragon': { baseHp: 300, baseDmg: 25, xpMod: 5.0 },
+    'Beholder': { baseHp: 180, baseDmg: 22, xpMod: 4.5 },
+    'Kraken': { baseHp: 250, baseDmg: 20, xpMod: 5.0 },
+    'Vampire': { baseHp: 100, baseDmg: 18, xpMod: 3.5 },
+    
+    // Dungeon Bosses (Implicitly detected by prefix or context, but here for reference)
+    'Crypt Lord': { baseHp: 400, baseDmg: 25, xpMod: 10.0 },
+    'Brood Mother': { baseHp: 350, baseDmg: 30, xpMod: 10.0 },
+    'Molten King': { baseHp: 500, baseDmg: 35, xpMod: 10.0 },
+};
+
 export const ITEMS: Record<string, Item> = {
     'wood': { id: 'wood', name: 'Wood', type: 'MATERIAL', description: 'Used for crafting.', count: 1, value: 1 },
     'oak_log': { id: 'oak_log', name: 'Oak Log', type: 'MATERIAL', description: 'Sturdy oak wood.', count: 1, value: 2 },
@@ -122,11 +182,29 @@ export const ITEMS: Record<string, Item> = {
     'potion_small': { id: 'potion_small', name: 'Small Potion', type: 'CONSUMABLE', description: 'Heals 20 HP.', count: 1, healAmount: 20, value: 10 },
     'potion_medium': { id: 'potion_medium', name: 'Medium Potion', type: 'CONSUMABLE', description: 'Heals 100 HP.', count: 1, healAmount: 100, value: 50 },
     'potion_large': { id: 'potion_large', name: 'Large Potion', type: 'CONSUMABLE', description: 'Heals 500 HP.', count: 1, healAmount: 500, value: 200 },
-    'raw_fish': { id: 'raw_fish', name: 'Raw Fish', type: 'CONSUMABLE', description: 'Slimy but nutritious. Heals 10 HP.', count: 1, healAmount: 10, value: 5 },
+    
+    // Fish Progression
+    'raw_fish': { id: 'raw_fish', name: 'Raw Fish', type: 'CONSUMABLE', description: 'Slimy. Heals 5 HP.', count: 1, healAmount: 5, value: 5 },
+    'cooked_fish': { id: 'cooked_fish', name: 'Cooked Fish', type: 'CONSUMABLE', description: 'Tasty! Heals 15 HP.', count: 1, healAmount: 15, value: 10 },
+    
+    'raw_trout': { id: 'raw_trout', name: 'Raw Trout', type: 'CONSUMABLE', description: 'A common river fish. Heals 10 HP.', count: 1, healAmount: 10, value: 10 },
+    'cooked_trout': { id: 'cooked_trout', name: 'Cooked Trout', type: 'CONSUMABLE', description: 'Perfectly grilled. Heals 30 HP.', count: 1, healAmount: 30, value: 20 },
+    
+    'raw_salmon': { id: 'raw_salmon', name: 'Raw Salmon', type: 'CONSUMABLE', description: 'Rich in oils. Heals 20 HP.', count: 1, healAmount: 20, value: 25 },
+    'cooked_salmon': { id: 'cooked_salmon', name: 'Cooked Salmon', type: 'CONSUMABLE', description: 'A hearty meal. Heals 60 HP.', count: 1, healAmount: 60, value: 50 },
+    
+    'raw_tuna': { id: 'raw_tuna', name: 'Raw Tuna', type: 'CONSUMABLE', description: 'A large ocean fish. Heals 40 HP.', count: 1, healAmount: 40, value: 50 },
+    'cooked_tuna': { id: 'cooked_tuna', name: 'Cooked Tuna', type: 'CONSUMABLE', description: 'Steak of the sea. Heals 120 HP.', count: 1, healAmount: 120, value: 100 },
+    
+    'raw_shark': { id: 'raw_shark', name: 'Raw Shark', type: 'CONSUMABLE', description: 'Apex predator meat. Heals 100 HP.', count: 1, healAmount: 100, value: 150 },
+    'cooked_shark': { id: 'cooked_shark', name: 'Cooked Shark', type: 'CONSUMABLE', description: 'Legendary feast. Heals 300 HP.', count: 1, healAmount: 300, value: 300 },
+
     'iron_key': { id: 'iron_key', name: 'Iron Key', type: 'KEY', description: 'Opens basic locked doors and chests.', count: 1, value: 25 },
+    'boss_key': { id: 'boss_key', name: 'Skull Key', type: 'KEY', description: 'Opens the massive chest guarded by a Dungeon Boss.', count: 1, value: 500, rarity: 'RARE' },
     
     // Gadgets / Placables
     'mob_spawner_item': { id: 'mob_spawner_item', name: 'Cage of Souls', type: 'GADGET', description: 'A captured spawner. Use to place.', count: 1, value: 500, rarity: 'EPIC' },
+    'campfire_kit': { id: 'campfire_kit', name: 'Campfire Kit', type: 'GADGET', description: 'Placeable cooking station.', count: 1, value: 25, rarity: 'COMMON' },
 
     // Blueprints
     'blueprint_potion_medium': { id: 'blueprint_potion_medium', name: 'Blueprint: Medium Potion', type: 'BLUEPRINT', description: 'Teaches how to brew medium potions.', count: 1, value: 100, recipeId: 'potion_medium', rarity: 'UNCOMMON' },
@@ -149,15 +227,24 @@ export const RECIPES: Recipe[] = [
     { id: 'potion_medium', name: 'Medium Potion', resultItemId: 'potion_medium', yield: 1, skill: 'Alchemy', levelReq: 10, xpReward: 50, ingredients: [{itemId: 'herb', count: 10}], station: 'ALCHEMY_TABLE' },
     { id: 'wood_plank', name: 'Wood Plank', resultItemId: 'wood', yield: 2, skill: 'Logging', levelReq: 1, xpReward: 5, ingredients: [{itemId: 'wood', count: 1}], station: 'WORKBENCH' },
     { id: 'fishing_rod', name: 'Fishing Rod', resultItemId: 'fishing_rod', yield: 1, skill: 'Crafting', levelReq: 1, xpReward: 15, ingredients: [{itemId: 'wood', count: 3}], station: 'WORKBENCH' },
+    { id: 'campfire_kit', name: 'Campfire Kit', resultItemId: 'campfire_kit', yield: 1, skill: 'Crafting', levelReq: 1, xpReward: 20, ingredients: [{itemId: 'wood', count: 5}, {itemId: 'stone', count: 5}], station: 'WORKBENCH' },
     { id: 'iron_ingot', name: 'Iron Ingot', resultItemId: 'iron_ingot', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 20, ingredients: [{itemId: 'iron_ore', count: 2}], station: 'ANVIL' },
     { id: 'iron_key', name: 'Iron Key', resultItemId: 'iron_key', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 25, ingredients: [{itemId: 'iron_ingot', count: 1}], station: 'ANVIL' },
     { id: 'sword_iron', name: 'Iron Sword', resultItemId: 'sword_iron', yield: 1, skill: 'Crafting', levelReq: 3, xpReward: 50, ingredients: [{itemId: 'iron_ingot', count: 2}, {itemId: 'wood', count: 1}], station: 'ANVIL' },
+    
+    // Cooking Recipes
+    { id: 'cooked_fish', name: 'Cooked Fish', resultItemId: 'cooked_fish', yield: 1, skill: 'Cooking', levelReq: 1, xpReward: 10, ingredients: [{itemId: 'raw_fish', count: 1}], station: 'CAMPFIRE' },
+    { id: 'cooked_trout', name: 'Cooked Trout', resultItemId: 'cooked_trout', yield: 1, skill: 'Cooking', levelReq: 5, xpReward: 20, ingredients: [{itemId: 'raw_trout', count: 1}], station: 'CAMPFIRE' },
+    { id: 'cooked_salmon', name: 'Cooked Salmon', resultItemId: 'cooked_salmon', yield: 1, skill: 'Cooking', levelReq: 15, xpReward: 40, ingredients: [{itemId: 'raw_salmon', count: 1}], station: 'CAMPFIRE' },
+    { id: 'cooked_tuna', name: 'Cooked Tuna', resultItemId: 'cooked_tuna', yield: 1, skill: 'Cooking', levelReq: 30, xpReward: 80, ingredients: [{itemId: 'raw_tuna', count: 1}], station: 'CAMPFIRE' },
+    { id: 'cooked_shark', name: 'Cooked Shark', resultItemId: 'cooked_shark', yield: 1, skill: 'Cooking', levelReq: 50, xpReward: 200, ingredients: [{itemId: 'raw_shark', count: 1}], station: 'CAMPFIRE' },
 ];
 
 export const MERCHANT_STOCK: { itemId: string, price: number }[] = [
     { itemId: 'potion_small', price: 25 }, // Markup from value 10
     { itemId: 'wood', price: 5 },
     { itemId: 'iron_ore', price: 15 },
+    { itemId: 'campfire_kit', price: 50 },
     { itemId: 'blueprint_potion_medium', price: 250 },
     { itemId: 'blueprint_iron_sword', price: 300 },
 ];
@@ -178,40 +265,10 @@ export const PERKS: Record<string, Perk> = {
     'fish_friend': { id: 'fish_friend', name: 'Aquatic', description: 'Regen in water.', icon: '🐟', statBonus: { regeneration: 2 } },
     'scholar': { id: 'scholar', name: 'Scholar', description: '+5 INT.', icon: '📜', statBonus: { int: 5 } },
     'traveler': { id: 'traveler', name: 'Traveler', description: 'Move faster (meta).', icon: '🌍', statBonus: { dex: 3 } },
+    'xp_boost': { id: 'xp_boost', name: 'Ancient Wisdom', description: '+20% XP Gain.', icon: '📖', specialEffect: 'XP_BOOST' },
+    'tank': { id: 'tank', name: 'Colossus', description: '+50 Max HP.', icon: '🛡️', statBonus: { maxHp: 50 } },
+    'master_looter': { id: 'master_looter', name: 'Master Looter', description: 'Better drops.', icon: '💎', statBonus: { dex: 3 } },
 };
 
-// --- SECRETS DATA COVERING ALL ACTIVITIES ---
-export const SECRETS_DATA: Secret[] = [
-    // Exploration / Movement
-    { id: 'explorer', title: 'Explorer', description: 'Explore 100 tiles.', hint: 'Walk around the world.', statBonus: { dex: 1 }, unlocked: false, perkId: 'vision_plus', condition: (gs) => Object.values(gs.exploration).flat().flat().filter(x=>x).length > 100 },
-    { id: 'marathon', title: 'Marathon Runner', description: 'Take 1,000 steps.', hint: 'A long journey begins with a single step.', statBonus: { dex: 2, hp: 10 }, unlocked: false, perkId: 'traveler', condition: (gs) => (gs.counters['steps_taken'] || 0) >= 1000 },
-    
-    // Time
-    { id: 'nocturnal', title: 'Nocturnal', description: 'Stay awake until midnight (Time 2400).', hint: 'Watch the moon rise.', statBonus: { int: 2 }, unlocked: false, perkId: 'night_vision', condition: (gs) => gs.time >= 2350 },
-    
-    // Collection
-    { id: 'relic_hunter', title: 'Relic Hunter', description: 'Collect 3 Ancient Relics.', hint: 'Find glowing orbs.', statBonus: { int: 2 }, unlocked: false, perkId: 'secret_sense', condition: (gs) => (gs.counters['relics_found'] || 0) >= 3 },
-    { id: 'collector', title: 'Curator', description: 'Hold 3 unique collectibles.', hint: 'Gather shiny things.', statBonus: { int: 2 }, unlocked: false, perkId: 'scholar', condition: (gs) => gs.inventory.filter(i => i.type === 'COLLECTIBLE').length >= 3 },
-    { id: 'rich_hunter', title: 'Tycoon', description: 'Amass 500 Gold.', hint: 'Greed is good.', statBonus: { gold: 100 }, unlocked: false, perkId: 'midas_touch', condition: (gs) => gs.stats.gold >= 500 },
-
-    // Puzzle
-    { id: 'puzzle_master', title: 'Puzzle Master', description: 'Solve a Puzzle.', hint: 'Use your brain.', statBonus: { str: 2 }, unlocked: false, perkId: 'puzzle_mind', condition: (gs) => (gs.counters['puzzles_solved'] || 0) >= 1 },
-    
-    // Combat
-    { id: 'survivor', title: 'Survivor', description: 'Take 100 damage total.', hint: 'What does not kill you...', statBonus: { maxHp: 10 }, unlocked: false, perkId: 'iron_skin', condition: (gs) => (gs.counters['damage_taken'] || 0) >= 100 },
-    { id: 'butcher', title: 'Butcher', description: 'Kill 20 enemies.', hint: 'Violence is the answer.', statBonus: { str: 2 }, unlocked: false, perkId: 'berserker', condition: (gs) => (gs.counters['enemies_killed'] || 0) >= 20 },
-    
-    // Gathering / Logging Secrets
-    { id: 'lumberjack', title: 'Lumberjack', description: 'Chop 20 Trees.', hint: 'Timber!', statBonus: { str: 2 }, unlocked: false, perkId: 'gatherer', condition: (gs) => (gs.counters['trees_cut'] || 0) >= 20 },
-    { id: 'miner', title: 'Miner', description: 'Mine 20 Rocks.', hint: 'Dig deep.', statBonus: { str: 2 }, unlocked: false, perkId: 'gatherer', condition: (gs) => (gs.counters['rocks_mined'] || 0) >= 20 },
-    { id: 'angler', title: 'Angler', description: 'Catch 10 Fish.', hint: 'Patience by the water.', statBonus: { dex: 2 }, unlocked: false, perkId: 'fish_friend', condition: (gs) => (gs.counters['fish_caught'] || 0) >= 10 },
-    
-    // Crafting
-    { id: 'blacksmith', title: 'Blacksmith', description: 'Craft 10 Items.', hint: 'Forge your destiny.', statBonus: { str: 1, int: 1 }, unlocked: false, perkId: 'titan_grip', condition: (gs) => (gs.counters['items_crafted'] || 0) >= 10 },
-    
-    // Interaction
-    { id: 'scholar', title: 'Bookworm', description: 'Read 5 signs or books.', hint: 'Knowledge is power.', statBonus: { int: 3 }, unlocked: false, perkId: 'scholar', condition: (gs) => (gs.counters['lore_read'] || 0) >= 5 },
-];
-
 // Initialize Maps via Generator (The array is mutated by reference in generator to add dynamic secrets)
-export const MAPS = createWorld(SECRETS_DATA);
+export const MAPS = createWorld(ALL_SECRETS);

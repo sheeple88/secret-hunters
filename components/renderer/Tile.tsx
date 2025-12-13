@@ -51,20 +51,25 @@ export const Tile: React.FC<TileProps> = React.memo(({ type, x, y, isExit }) => 
     case 'DIRT_PATH': baseAsset = ASSETS.DIRT_PATH; bgColor = "bg-amber-700"; break;
     case 'STAIRS_DOWN': baseAsset = ASSETS.STAIRS_DOWN; bgColor = "bg-black"; break;
     case 'STAIRS_UP': baseAsset = ASSETS.STAIRS_UP; bgColor = "bg-stone-500"; break;
+
+    // Dungeons
+    case 'ENTRANCE_CRYPT': baseAsset = ASSETS.ENTRANCE_CRYPT; bgColor = "bg-stone-950"; break;
+    case 'ENTRANCE_CAVE': baseAsset = ASSETS.ENTRANCE_CAVE; bgColor = "bg-stone-800"; break;
+    case 'ENTRANCE_MAGMA': baseAsset = ASSETS.ENTRANCE_MAGMA; bgColor = "bg-red-950"; break;
   }
 
   return (
     <div
-      className={clsx("w-8 h-8 relative", bgColor)}
+      className={clsx("w-full h-full relative", bgColor)}
       style={{
           imageRendering: 'pixelated',
       }}
     >
-      {/* Base Layer - scaled slightly up to overlap gaps */}
+      {/* Base Layer - Scaled to 105% to aggressively bleed over gaps */}
       <img 
         src={baseAsset} 
-        className={clsx("absolute inset-0 w-full h-full object-cover", type === 'LAVA' && "animate-pulse")} 
-        style={{ transform: 'scale(1.02)' }}
+        className={clsx("absolute inset-0 w-full h-full object-cover", (type === 'LAVA' || type === 'ENTRANCE_MAGMA') && "animate-pulse")} 
+        style={{ transform: 'scale(1.05)' }} 
         alt="" 
       />
       
@@ -76,6 +81,7 @@ export const Tile: React.FC<TileProps> = React.memo(({ type, x, y, isExit }) => 
             "absolute inset-0 w-full h-full object-cover z-10",
             type === 'WATERFALL' && "animate-pulse" 
           )} 
+          style={{ transform: 'scale(1.05)' }}
           alt="" 
         />
       )}

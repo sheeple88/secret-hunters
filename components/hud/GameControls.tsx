@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { 
-  Backpack, BookOpen, Star, Ghost, Map as MapIcon,
+  Backpack, BookOpen, Star, Ghost, Map as MapIcon, Settings,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hand 
 } from 'lucide-react';
 import { VirtualJoystick } from './VirtualJoystick';
@@ -10,9 +10,10 @@ interface GameControlsProps {
   onMove: (dx: number, dy: number) => void;
   onInteract: () => void;
   onOpenModal: (modal: string) => void;
+  hasNewSecret?: boolean;
 }
 
-export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, onOpenModal }) => {
+export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, onOpenModal, hasNewSecret }) => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, 
       return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  const ControlButton = ({ onClick, icon: Icon, color = "stone", size = "md", title }: any) => {
+  const ControlButton = ({ onClick, icon: Icon, color = "stone", size = "md", title, showDot }: any) => {
       const baseStyles = "relative flex items-center justify-center rounded-lg shadow-lg active:translate-y-1 transition-all select-none touch-manipulation border-b-4 active:border-b-0 active:mt-1";
       
       const colors: any = {
@@ -32,6 +33,7 @@ export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, 
           purple: "bg-purple-600 border-purple-800 text-purple-100 hover:bg-purple-500",
           red: "bg-red-600 border-red-800 text-red-100 hover:bg-red-500",
           green: "bg-green-700 border-green-900 text-green-100 hover:bg-green-600",
+          dark: "bg-stone-800 border-stone-950 text-stone-400 hover:bg-stone-700"
       };
 
       const sizes: any = {
@@ -51,6 +53,12 @@ export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, 
             title={title}
           >
               <Icon className={size === 'sm' ? "w-5 h-5" : size === 'xl' ? "w-10 h-10" : "w-8 h-8"} strokeWidth={2.5} />
+              {showDot && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3 pointer-events-none">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-white"></span>
+                  </span>
+              )}
           </button>
       );
   };
@@ -62,9 +70,11 @@ export const GameControls: React.FC<GameControlsProps> = ({ onMove, onInteract, 
              <div className="flex gap-1 p-1 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 shadow-xl">
                 <ControlButton onClick={() => onOpenModal('INVENTORY')} icon={Backpack} color="stone" size="sm" title="Inventory (I)" />
                 <ControlButton onClick={() => onOpenModal('SKILLS')} icon={BookOpen} color="blue" size="sm" title="Skills (K)" />
-                <ControlButton onClick={() => onOpenModal('SECRETS')} icon={Star} color="amber" size="sm" title="Journal" />
+                <ControlButton onClick={() => onOpenModal('SECRETS')} icon={Star} color="amber" size="sm" title="Journal" showDot={hasNewSecret} />
                 <ControlButton onClick={() => onOpenModal('BESTIARY')} icon={Ghost} color="purple" size="sm" title="Bestiary" />
                 <ControlButton onClick={() => onOpenModal('MAP')} icon={MapIcon} color="green" size="sm" title="World Map" />
+                <div className="w-px bg-white/10 mx-1"/>
+                <ControlButton onClick={() => onOpenModal('SETTINGS')} icon={Settings} color="dark" size="sm" title="Settings" />
              </div>
         </div>
 

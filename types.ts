@@ -16,12 +16,12 @@ export type Stats = {
   xp: number;
   level: number;
   gold: number;
-  unspentStatPoints: number; // New field for manual allocation
+  unspentStatPoints: number;
 };
 
 export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
 
-export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing';
+export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
 
 export interface Skill {
   name: SkillName;
@@ -38,7 +38,7 @@ export interface Recipe {
     levelReq: number;
     xpReward: number;
     ingredients: { itemId: string; count: number }[];
-    station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE'; // Requirement
+    station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE';
 }
 
 export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY' | 'COLLECTIBLE' | 'GADGET' | 'BLUEPRINT';
@@ -50,11 +50,11 @@ export interface WeaponStats {
     type: WeaponType;
     minDmg: number;
     maxDmg: number;
-    critChance: number; // 0.0 to 1.0
-    critMult: number; // e.g. 1.5
+    critChance: number;
+    critMult: number;
     range: number;
-    cleave?: boolean; // Hits enemies adjacent to target
-    multiHitChance?: number; // Chance to hit twice
+    cleave?: boolean;
+    multiHitChance?: number;
     magicType?: MagicType;
 }
 
@@ -64,34 +64,44 @@ export interface Item {
   type: ItemType;
   description: string;
   count: number;
-  healAmount?: number; // For consumables
-  // Equipment specific
+  healAmount?: number;
   slot?: EquipmentSlot;
   stats?: Partial<Stats>;
-  weaponStats?: WeaponStats; // New field for weapons
+  weaponStats?: WeaponStats;
   rarity?: Rarity;
   levelReq?: number;
   value?: number;
-  recipeId?: string; // For Blueprints
+  recipeId?: string;
 }
 
 export interface Perk {
   id: string;
   name: string;
   description: string;
-  icon: string; // Emoji or short symbol
-  statBonus?: Partial<Stats>; // Passive stat increase
+  icon: string;
+  statBonus?: Partial<Stats>;
   specialEffect?: 'VISION_PLUS' | 'LAVA_RESIST' | 'XP_BOOST' | 'GOLD_BOOST' | 'AUTO_HEAL' | 'SECRET_SENSE' | 'NIGHT_VISION';
+}
+
+// --- NEW DATA STRUCTURES ---
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string; // Explicit instruction (e.g., "Kill 100 Skeletons")
+  reward: { gold?: number; xp?: number; itemId?: string };
+  condition: (gameState: GameState) => boolean;
+  progress?: (gameState: GameState) => number; // 0.0 to 1.0 for progress bar
 }
 
 export interface Secret {
   id: string;
+  type: 'COMBAT' | 'WORLD' | 'INTERACTION';
   title: string;
-  description: string;
-  hint: string; // Static hint, AI will generate better ones
-  statBonus: Partial<Stats>;
-  unlocked: boolean;
-  perkId: string; // The perk unlocked by this secret
+  hint: string; // Cryptic clue (e.g., "The dead fear the light")
+  description: string; // Revealed ONLY after unlock
+  statBonus?: Partial<Stats>;
+  perkId?: string;
   condition: (gameState: GameState) => boolean;
 }
 
@@ -100,12 +110,12 @@ export interface Quest {
   title: string;
   description: string;
   type: 'KILL' | 'COLLECT';
-  targetId: string; // Enemy Name or Item ID
+  targetId: string;
   targetCount: number;
   currentCount: number;
   reward: { xp: number; gold?: number; itemId?: string; itemCount?: number };
   completed: boolean;
-  giverId: string; // NPC ID who gave it
+  giverId: string;
 }
 
 export type AiType = 'MELEE' | 'RANGED' | 'FLEE' | 'STATIC';
@@ -113,34 +123,31 @@ export type AiType = 'MELEE' | 'RANGED' | 'FLEE' | 'STATIC';
 export interface Entity {
   id: string;
   name: string;
-  type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER'; 
-  symbol: string; // Emoji or char
+  type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE' | 'ITEM_DROP';
+  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT'; 
+  symbol: string;
   color: string;
   pos: Position;
   hp?: number;
   maxHp?: number;
-  level?: number; // Enemy level
+  level?: number;
   dialogue?: string[];
-  facing?: Direction; // Visual only
-  loot?: string; // Item ID for chests
-  destination?: { mapId: string, x: number, y: number, name: string }; // For signposts or teleporters
-  questId?: string; // If this NPC gives a quest
-  
-  // AI Props
+  facing?: Direction;
+  loot?: string;
+  destination?: { mapId: string, x: number, y: number, name: string };
+  questId?: string;
+  keyId?: string;
   aiType?: AiType;
-  aggroRange?: number; // How far they can see player
-  attackRange?: number; // How far they can hit (1 for melee)
+  aggroRange?: number;
+  attackRange?: number;
   magicType?: MagicType;
-  
-  // Spawner Props
-  isSpawned?: boolean; // If true, reduced XP/Loot
-  lastSpawnTime?: number; // Timestamp
-  lastSpawnStep?: number; // Steps taken
-  spawnType?: string; // Monster name base
+  isSpawned?: boolean;
+  lastSpawnTime?: number;
+  lastSpawnStep?: number;
+  spawnType?: string;
 }
 
-export type TileType = 'GRASS' | 'WALL' | 'WATER' | 'FLOOR' | 'TREE' | 'OAK_TREE' | 'BIRCH_TREE' | 'PINE_TREE' | 'STUMP' | 'ROCK' | 'SHRINE' | 'PLANK' | 'DOOR' | 'LAVA' | 'VOID' | 'SAND' | 'MUD' | 'FLOWER' | 'WATERFALL' | 'SNOW' | 'ICE' | 'CACTUS' | 'STONE_BRICK' | 'GRAVESTONE' | 'DEEP_WATER' | 'BONES' | 'OBSIDIAN' | 'DIRT_PATH' | 'STAIRS_UP' | 'STAIRS_DOWN' | 'CRACKED_WALL' | 'ROOF';
+export type TileType = 'GRASS' | 'WALL' | 'WATER' | 'FLOOR' | 'TREE' | 'OAK_TREE' | 'BIRCH_TREE' | 'PINE_TREE' | 'STUMP' | 'ROCK' | 'SHRINE' | 'PLANK' | 'DOOR' | 'LAVA' | 'VOID' | 'SAND' | 'MUD' | 'FLOWER' | 'WATERFALL' | 'SNOW' | 'ICE' | 'CACTUS' | 'STONE_BRICK' | 'GRAVESTONE' | 'DEEP_WATER' | 'BONES' | 'OBSIDIAN' | 'DIRT_PATH' | 'STAIRS_UP' | 'STAIRS_DOWN' | 'CRACKED_WALL' | 'ROOF' | 'ENTRANCE_CRYPT' | 'ENTRANCE_CAVE' | 'ENTRANCE_MAGMA';
 
 export interface GameMap {
   id: string;
@@ -149,9 +156,9 @@ export interface GameMap {
   height: number;
   tiles: TileType[][];
   entities: Entity[];
-  neighbors: { UP?: string; DOWN?: string; LEFT?: string; RIGHT?: string; }; // Neighbors IDs
-  exits: { pos: Position; targetMapId: string; targetPos: Position }[]; // Legacy specific exits (teleporters)
-  difficulty: number; // Multiplier for enemy levels
+  neighbors: { UP?: string; DOWN?: string; LEFT?: string; RIGHT?: string; };
+  exits: { pos: Position; targetMapId: string; targetPos: Position }[];
+  difficulty: number;
   biome: string;
   isTown?: boolean;
 }
@@ -159,7 +166,7 @@ export interface GameMap {
 export interface LogEntry {
   id: string;
   message: string;
-  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST' | 'DEBUG' | 'TRADE';
+  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST' | 'DEBUG' | 'TRADE' | 'ACHIEVEMENT';
   timestamp: number;
 }
 
@@ -169,38 +176,39 @@ export interface GameState {
   playerPos: Position;
   playerFacing: Direction;
   currentMapId: string;
-  stats: Stats; // Base stats
-  equipment: Record<EquipmentSlot, Item | null>; // Equipped items
+  stats: Stats;
+  equipment: Record<EquipmentSlot, Item | null>;
   skills: Record<SkillName, Skill>;
   inventory: Item[];
-  knownRecipes: string[]; // List of recipe IDs unlocked
-  secrets: Secret[];
-  // Perks System
-  unlockedPerks: string[]; // List of Perk IDs
-  equippedPerks: string[]; // Max 3 IDs
-  bestiary: string[]; // List of unlocked enemy names
-  counters: Record<string, number>; // Generic counters for tracking actions
+  knownRecipes: string[];
+  
+  // Refactored Progress Tracking
+  unlockedSecretIds: string[]; // List of IDs
+  unlockedAchievementIds: string[]; // List of IDs
+  
+  unlockedPerks: string[];
+  equippedPerks: string[];
+  bestiary: string[];
+  counters: Record<string, number>;
   logs: LogEntry[];
-  flags: Record<string, boolean>; // Boolean flags for one-off events
+  flags: Record<string, boolean>;
   lastAction: string | null;
   isCombat: boolean;
   combatTargetId: string | null;
-  activeQuest: Quest | null; // Currently active quest
-  // Exploration & World State
-  exploration: Record<string, number[][]>; // 0=Hidden, 1=Revealed per map
-  worldModified: Record<string, Record<string, TileType>>; // mapId -> "y,x" -> TileType (For persistent trees/rocks cut)
-  knownWaypoints: string[]; // List of mapIds with unlocked waypoints
-  knownLocations: string[]; // List of mapIds revealed by signs/lore
-  animations: Record<string, AnimationType>; // Transient animations
-  time: number; // 0 to 2400 (Day/Night cycle)
-  
-  // Stat Automation
+  activeQuest: Quest | null;
+  exploration: Record<string, number[][]>;
+  worldModified: Record<string, Record<string, TileType>>;
+  knownWaypoints: string[];
+  knownLocations: string[];
+  animations: Record<string, AnimationType>;
+  time: number;
   autoDistributeStats: boolean;
   statAllocation: {
-      str: number; // Percentage 0-100
+      str: number;
       dex: number;
       int: number;
       hp: number;
       regeneration: number;
   };
+  worldTier: number;
 }

@@ -1,16 +1,17 @@
 
 import { GameState, Position, AnimationType, LogEntry, Item, GameMap } from '../types';
-import { MAPS, ITEMS, WEAPON_TEMPLATES, uid, calculateSkillLevel } from '../constants';
+import { MAPS, ITEMS, WEAPON_TEMPLATES, uid, calculateSkillLevel, SCALE_FACTOR, MONSTER_TEMPLATES } from '../constants';
 import { playSound } from '../services/audioService';
 import { generateLoot } from '../services/itemService';
 import { processEnemyTurns, processSpawners } from './ai';
+import { generateDungeon } from './mapGenerator';
 
 const BLOCKED_TILES = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'SHRINE', 'VOID', 'WATER', 'CACTUS', 'DEEP_WATER', 'OBSIDIAN', 'CRACKED_WALL', 'ROOF'];
 const TREE_TYPES = ['TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE'];
 
 // Helper to calculate stats inside the logic (or pass them in)
 const getPlayerTotalStats = (gs: GameState) => {
-    return { str: gs.stats.str, dex: gs.stats.dex }; 
+    return { str: gs.stats.str, dex: gs.stats.dex, int: gs.stats.int }; 
 };
 
 // Skill XP Helper
@@ -24,8 +25,10 @@ const applySkillXp = (gs: GameState, skillName: string, amount: number) => {
     let statChanges: any = {};
     if (levelsGained > 0) {
         playSound('LEVEL_UP');
-        if (skillName === 'Strength') statChanges.str = (gs.stats.str) + (levelsGained * 2);
-        if (skillName === 'Dexterity') statChanges.dex = (gs.stats.dex) + (levelsGained * 2);
+        // Exponential stat gain from skills? Or stick to linear helper?
+        // Let's keep skills linear but influential
+        if (skillName === 'Strength') statChanges.str = (gs.stats.str) + (levelsGained * 5);
+        if (skillName === 'Dexterity') statChanges.dex = (gs.stats.dex) + (levelsGained * 5);
     }
     return { updatedSkill: { ...skill, xp: newXp, level: newLevel }, statChanges, levelsGained };
 };
@@ -152,6 +155,7 @@ export const handlePlayerMove = (
     let newWorldMod = { ...prev.worldModified };
     let newBestiary = [...prev.bestiary];
     let nextMapEntities = [...targetMap.entities];
+    let newWorldTier = prev.worldTier || 0; // Track World Tier
 
     // Transition Logging
     if (didTransition) {
@@ -164,6 +168,56 @@ export const handlePlayerMove = (
     const mapMod = newWorldMod[nextMapId];
     if (mapMod && mapMod[`${nextPos.y},${nextPos.x}`]) {
         targetTile = mapMod[`${nextPos.y},${nextPos.x}`];
+    }
+    
+    // Check Dungeon Entrance
+    if (['ENTRANCE_CRYPT', 'ENTRANCE_CAVE', 'ENTRANCE_MAGMA'].includes(targetTile)) {
+        // Generate a unique ID for this dungeon instance location
+        const dungeonId = `dungeon_${nextMapId}_${nextPos.x}_${nextPos.y}`;
+        let type: 'CRYPT' | 'CAVE' | 'MAGMA' = 'CAVE';
+        if (targetTile === 'ENTRANCE_CRYPT') type = 'CRYPT';
+        if (targetTile === 'ENTRANCE_MAGMA') type = 'MAGMA';
+
+        if (!MAPS[dungeonId]) {
+            // Generate it on the fly
+            // Scale based on Max(Zone Difficulty, Player Level)
+            const d = map.difficulty || 1;
+            // Pass world tier to make dungeons harder as you progress
+            MAPS[dungeonId] = generateDungeon(dungeonId, d, type, nextMapId, nextPos, prev.stats.level, newWorldTier);
+        }
+
+        const dungeonMap = MAPS[dungeonId];
+        // Find the stairs up (start)
+        let sx = 1, sy = 1;
+        for(let y=0; y<dungeonMap.height; y++){
+            for(let x=0; x<dungeonMap.width; x++){
+                if (dungeonMap.tiles[y][x] === 'STAIRS_UP') { sx = x; sy = y; break; }
+            }
+        }
+
+        playSound('UI_CLICK');
+        // Transition
+        didTransition = true;
+        nextMapId = dungeonId;
+        nextPos = { x: sx, y: sy };
+        nextMapEntities = [...dungeonMap.entities]; // Switch to dungeon entities
+        
+        combatLogs.push({ id: uid(), message: `Entered ${dungeonMap.name}`, type: 'INFO', timestamp: Date.now() });
+
+        // Initialize Exploration for Dungeon
+        const newExp = { ...prev.exploration };
+        if (!newExp[nextMapId]) {
+            newExp[nextMapId] = Array(dungeonMap.height).fill(null).map(() => Array(dungeonMap.width).fill(0));
+        }
+
+        return { 
+            ...prev, 
+            playerPos: nextPos, 
+            currentMapId: nextMapId, 
+            exploration: newExp, 
+            playerFacing: 'DOWN',
+            logs: [...combatLogs, ...prev.logs].slice(0,100)
+        };
     }
 
     // Check collision with tile (Gathering)
@@ -209,8 +263,45 @@ export const handlePlayerMove = (
    let entity = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
 
    if (entity) {
+       // Item Drop Pickup
+       if (entity.type === 'ITEM_DROP' && entity.loot) {
+           playSound('UI_CLICK');
+           const item = ITEMS[entity.loot];
+           if (item) {
+               const pickupItem = { ...item };
+               // ONLY assign new UID if it's NOT a stackable generic item (Key, Material, Consumable, GADGET, BLUEPRINT)
+               // This ensures 'boss_key' stays 'boss_key' so checks work
+               // Added GADGET and BLUEPRINT to stackable list so they keep their IDs
+               if (!['MATERIAL', 'CONSUMABLE', 'JUNK', 'KEY', 'COLLECTIBLE', 'GADGET', 'BLUEPRINT'].includes(item.type)) {
+                   pickupItem.id = uid();
+               }
+
+               // Check if exists in inventory to stack
+               const existingIdx = newInventory.findIndex(i => i.id === pickupItem.id);
+               if (existingIdx !== -1) {
+                   // Stack
+                   newInventory = newInventory.map((i, idx) => idx === existingIdx ? { ...i, count: i.count + 1 } : i);
+               } else {
+                   // Add new
+                   newInventory.push(pickupItem);
+               }
+
+               combatLogs.push({ id: uid(), message: `Picked up: ${item.name}`, type: 'LOOT', timestamp: Date.now() });
+               
+               // Remove from map
+               nextMapEntities = nextMapEntities.filter(e => e.id !== entity!.id);
+               // Allow movement into the tile
+               if (!didTransition) {
+                   playerDidAction = true;
+                   newCounters.steps_taken = (newCounters.steps_taken || 0) + 1;
+                   nextPos = { x: nextPos.x, y: nextPos.y };
+               }
+           }
+       }
+       
        // Check if this entity acts as a teleporter (has destination AND valid mapId)
-       if (entity.destination && entity.destination.mapId && MAPS[entity.destination.mapId]) {
+       // This handles the STAIRS_UP exit from dungeons too
+       else if (entity.destination && entity.destination.mapId && MAPS[entity.destination.mapId]) {
            // Teleport Logic ... (Preserved)
            playSound('UI_CLICK');
            const dest = entity.destination;
@@ -241,15 +332,37 @@ export const handlePlayerMove = (
        }
 
        // Attack Enemies or Destroy Spawners
-       if (entity.type === 'ENEMY' || entity.subType === 'MOB_SPAWNER') {
+       else if (entity.type === 'ENEMY' || entity.subType === 'MOB_SPAWNER') {
            // Combat
            playerDidAction = true;
            playSound('ATTACK');
            
-           // Combat Calcs
+           // --- COMBAT CALCULATION ---
            const weapon = prev.equipment.WEAPON?.weaponStats || WEAPON_TEMPLATES['Sword'];
-           let dmg = Math.floor(weapon.minDmg + (Math.random() * (weapon.maxDmg - weapon.minDmg)) + (prev.stats.str * 0.5)); 
-           if (Math.random() < weapon.critChance) dmg = Math.floor(dmg * weapon.critMult);
+           
+           // Determine Scaling Attribute based on weapon
+           let scalingStat = 0;
+           let skillUsed = 'Strength';
+
+           if (['SWORD', 'AXE', 'MACE', 'SPEAR'].includes(weapon.type)) {
+               scalingStat = prev.stats.str;
+               skillUsed = 'Strength';
+           } else if (['BOW', 'DAGGER'].includes(weapon.type)) {
+               scalingStat = prev.stats.dex;
+               skillUsed = 'Dexterity';
+           } else if (['STAFF', 'ROD'].includes(weapon.type)) {
+               scalingStat = prev.stats.int;
+               skillUsed = 'Agility'; // Or 'Magic' if we had it, fallback to agility for now or just generic XP
+           }
+
+           // Damage Formula: (Weapon Base + Random Var) + (Stat * 1.0)
+           // Crit: Multiplier
+           let dmg = Math.floor(weapon.minDmg + (Math.random() * (weapon.maxDmg - weapon.minDmg)) + scalingStat); 
+           
+           if (Math.random() < weapon.critChance) {
+               dmg = Math.floor(dmg * weapon.critMult);
+               // Add visual flair for crit later?
+           }
 
            const newEnemyHp = (entity.hp || 10) - dmg;
            
@@ -259,7 +372,6 @@ export const handlePlayerMove = (
            combatLogs.push({ id: uid(), message: `You hit ${entity.name} for ${dmg}`, type: 'COMBAT', timestamp: Date.now() });
 
            // Skill XP
-           const skillUsed = weapon.type === 'BOW' ? 'Dexterity' : 'Strength';
            const { updatedSkill, statChanges } = applySkillXp(prev, skillUsed, 5);
            newStats = { ...newStats, ...statChanges };
            newSkills[skillUsed] = updatedSkill;
@@ -271,20 +383,67 @@ export const handlePlayerMove = (
                
                if (entity.type === 'ENEMY') newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
                
-               // XP and Gold Calculation
-               // If spawned from cage, rewards are 1/4
-               let xpGain = Math.floor((entity.level || 1) * 10);
-               let goldGain = Math.floor((entity.level || 1) * (2 + Math.random() * 5));
+               // BOSS DROP LOGIC
+               if (entity.subType === 'BOSS') {
+                   // Spawn Key on floor
+                   nextMapEntities.push({
+                       id: `drop_${uid()}`,
+                       name: 'Skull Key',
+                       type: 'ITEM_DROP',
+                       loot: 'boss_key',
+                       symbol: 'k',
+                       color: 'yellow',
+                       pos: entity.pos
+                   });
+                   combatLogs.push({ id: uid(), message: `${entity.name} dropped a Key!`, type: 'SECRET', timestamp: Date.now() });
+                   
+                   // WORLD TIER INCREASE EVENT
+                   newWorldTier++;
+                   playSound('SECRET'); // Reuse sound or new one
+                   combatLogs.push({ 
+                       id: uid(), 
+                       message: `THE WORLD GROWS DARKER... (World Tier ${newWorldTier})`, 
+                       type: 'SECRET', 
+                       timestamp: Date.now() 
+                   });
+               }
+
+               // XP and Gold Calculation (EXPONENTIAL)
+               // Look up base XP mod from templates if possible
+               // Extract base name logic
+               let baseName = entity.name.split(' ').pop() || 'Slime';
+               if (['King', 'Lord', 'Mother', 'Dragon', 'Beholder', 'Lich'].some(k => entity.name.includes(k))) {
+                   // Keep full name for bosses if mapped
+                   if (MONSTER_TEMPLATES[entity.name]) baseName = entity.name;
+                   // Otherwise try finding partial match in keys
+                   else {
+                       const match = Object.keys(MONSTER_TEMPLATES).find(k => entity.name.includes(k));
+                       if (match) baseName = match;
+                   }
+               }
+               
+               const template = MONSTER_TEMPLATES[baseName] || MONSTER_TEMPLATES['Slime'];
+               const xpMod = template.xpMod || 1.0;
+
+               // Base Gain: 50 * Mod * 1.15^Level
+               let xpGain = Math.floor(50 * xpMod * Math.pow(SCALE_FACTOR, entity.level || 1));
+               let goldGain = Math.floor(10 * xpMod * Math.pow(SCALE_FACTOR, entity.level || 1) * (0.5 + Math.random()));
                
                if (entity.isSpawned) {
-                   xpGain = Math.max(1, Math.floor(xpGain / 4));
+                   xpGain = Math.max(1, Math.floor(xpGain / 2));
                    goldGain = Math.max(0, Math.floor(goldGain / 4));
                }
                
                if (entity.subType === 'MOB_SPAWNER') {
                    // Spawners give decent XP for destroying
-                   xpGain = 50;
+                   xpGain = Math.floor(100 * Math.pow(SCALE_FACTOR, entity.level || 1));
                    goldGain = 0;
+               }
+               
+               // Boss XP Bonus handled by template XP Mod usually, but safe to boost
+               if (entity.subType === 'BOSS') {
+                   xpGain *= 2; 
+                   goldGain *= 2;
                }
 
                newStats.xp += xpGain;
@@ -293,8 +452,14 @@ export const handlePlayerMove = (
                // Drop Calculation
                // If spawned, drop chance is reduced to 25% of normal
                if (Math.random() < (entity.isSpawned ? 0.25 : 1.0)) {
-                   const loot = generateLoot(entity.level || 1, entity.name);
+                   // If in a Dungeon, boost rarity!
+                   const isDungeon = targetMap.biome === 'DUNGEON';
+                   // Boss always drops rare+
+                   const rarityBoost = entity.subType === 'BOSS' ? 0.5 : (isDungeon ? 0.2 : 0); 
+                   
+                   const loot = generateLoot(entity.level || 1, entity.name, rarityBoost);
                    if (loot) {
+                       // Boss drop is usually equipment, pushed to inventory
                        const existing = newInventory.find(i => i.id === loot.id); 
                        newInventory.push(loot); 
                        combatLogs.push({ id: uid(), message: `Looted: ${loot.name}`, type: 'LOOT', timestamp: Date.now() });
@@ -415,6 +580,7 @@ export const handlePlayerMove = (
        logs: finalLogs,
        animations: newAnimations,
        exploration: newExp,
-       counters: newCounters
+       counters: newCounters,
+       worldTier: newWorldTier // Pass updated tier
    };
 };

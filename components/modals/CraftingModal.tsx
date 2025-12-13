@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { Hammer, Pickaxe, FlaskConical, X } from 'lucide-react';
+import { Hammer, Pickaxe, FlaskConical, X, Flame } from 'lucide-react';
 import { GameState, Recipe } from '../../types';
 import { RECIPES, ITEMS } from '../../constants';
 
 interface CraftingModalProps {
   gameState: GameState;
-  station: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE';
+  station: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE';
   onClose: () => void;
   onCraft: (recipe: Recipe) => void;
 }
@@ -17,8 +17,8 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({ gameState, station
         <div className="bg-stone-900 w-full max-w-lg p-6 rounded-xl border-4 border-stone-600 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-stone-200 flex items-center gap-2">
-                    {station === 'ANVIL' ? <Hammer/> : station === 'WORKBENCH' ? <Pickaxe/> : <FlaskConical/>} 
-                    Crafting
+                    {station === 'ANVIL' ? <Hammer/> : station === 'WORKBENCH' ? <Pickaxe/> : station === 'CAMPFIRE' ? <Flame className="text-orange-500"/> : <FlaskConical/>} 
+                    {station === 'CAMPFIRE' ? 'Cooking' : 'Crafting'}
                 </h2>
                 <button onClick={onClose}><X className="w-6 h-6 hover:text-red-400"/></button>
             </div>
@@ -37,13 +37,16 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({ gameState, station
                                 <div className="text-xs text-stone-500 mt-1">
                                     {recipe.ingredients.map(ing => `${ITEMS[ing.itemId].name} x${ing.count}`).join(', ')}
                                 </div>
+                                <div className="text-[10px] text-stone-600 mt-1">
+                                    Req: {recipe.skill} Lv.{recipe.levelReq}
+                                </div>
                             </div>
                             <button 
                                 onClick={() => onCraft(recipe)} 
                                 disabled={!canCraftLevel || !canCraftMats}
                                 className={`px-4 py-2 rounded text-sm font-bold ${canCraftLevel && canCraftMats ? 'bg-green-700 text-white hover:bg-green-600' : 'bg-stone-800 text-stone-500 cursor-not-allowed'}`}
                             >
-                                Craft
+                                {station === 'CAMPFIRE' ? 'Cook' : 'Craft'}
                             </button>
                         </div>
                     )

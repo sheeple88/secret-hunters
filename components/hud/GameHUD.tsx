@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { GameState, Stats, Item, Recipe } from '../../types';
-import { Save } from 'lucide-react';
 
 import { InventoryModal } from '../modals/InventoryModal';
 import { SkillsModal } from '../modals/SkillsModal';
@@ -12,6 +11,7 @@ import { PuzzleModal, PuzzleConfig } from '../modals/PuzzleModal';
 import { DialogueModal } from '../modals/DialogueModal';
 import { WorldMapModal } from '../modals/WorldMapModal';
 import { MerchantModal } from '../modals/MerchantModal';
+import { SettingsModal } from '../modals/SettingsModal';
 
 import { GameControls } from './GameControls';
 import { StatusBar } from './StatusBar';
@@ -19,7 +19,6 @@ import { ActionLog } from './ActionLog';
 import { DeathScreen } from './DeathScreen';
 import { QuestTracker } from './QuestTracker';
 import { UnlockNotification } from './UnlockNotification';
-import { DebugOverlay } from './DebugOverlay';
 
 interface GameHUDProps {
   gameState: GameState;
@@ -34,6 +33,7 @@ interface GameHUDProps {
   onCraft: (recipe: Recipe) => void;
   onRespawn: () => void;
   onResetSave: () => void;
+  onSaveGame: () => void;
   onConsume: (item: Item) => void;
   onTogglePerk: (id: string) => void;
   onPuzzleSolve: () => void;
@@ -44,6 +44,15 @@ interface GameHUDProps {
   onSell: (item: Item, price: number) => void;
   onStatIncrease: (stat: keyof Stats) => void;
   onAutoConfigChange: (enabled: boolean, allocation: any) => void;
+  onResetStats: () => void;
+  
+  // Settings Props
+  volume: number;
+  setVolume: (v: number) => void;
+  zoom: number;
+  setZoom: (z: number) => void;
+  lastSaved: number;
+  isSaving: boolean;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -59,6 +68,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onCraft,
   onRespawn,
   onResetSave,
+  onSaveGame,
   onConsume,
   onTogglePerk,
   onPuzzleSolve,
@@ -68,8 +78,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onBuy,
   onSell,
   onStatIncrease,
-  onAutoConfigChange
+  onAutoConfigChange,
+  onResetStats,
+  volume, setVolume, zoom, setZoom, lastSaved, isSaving
 }) => {
+
+  // Check for unseen secret flag from App state logic
+  const hasUnseenSecret = gameState.flags['new_secret'] === true;
 
   return (
     <>
@@ -83,12 +98,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       
       <UnlockNotification logs={gameState.logs} />
 
-      <DebugOverlay logs={gameState.logs} gameState={gameState} />
-
       <GameControls 
         onMove={onMove} 
         onInteract={onInteract}
         onOpenModal={setActiveModal} 
+        hasNewSecret={hasUnseenSecret}
       />
 
       <ActionLog 
@@ -104,6 +118,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onConsume={onConsume} 
             onStatIncrease={onStatIncrease}
             onAutoConfigChange={onAutoConfigChange}
+            onResetStats={onResetStats}
         />
       )}
       
@@ -133,6 +148,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <WorldMapModal 
             gameState={gameState} 
             onClose={() => setActiveModal(null)} 
+        />
+      )}
+
+      {activeModal === 'SETTINGS' && (
+        <SettingsModal 
+            onClose={() => setActiveModal(null)} 
+            volume={volume}
+            setVolume={setVolume}
+            zoom={zoom}
+            setZoom={setZoom}
+            onSave={onSaveGame}
+            onReset={onResetSave}
+            lastSaved={lastSaved}
         />
       )}
 
@@ -173,10 +201,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {activeModal === 'DEATH' && (
           <DeathScreen onRespawn={onRespawn} />
       )}
-      
-      <div className="fixed top-4 right-4 z-50 flex gap-2">
-          <button onClick={onResetSave} className="p-2 bg-red-900/50 hover:bg-red-900 text-red-200 rounded border border-red-800 text-xs flex items-center gap-1"><Save className="w-3 h-3"/> Reset</button>
-      </div>
     </>
   );
 };

@@ -25,12 +25,12 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
   cameraPosition
 }) => {
   
-  // Base map dimensions
-  const mapWidthRem = currentMap.width * 2;
-  const mapHeightRem = currentMap.height * 2;
+  // Base map dimensions in pixels
+  const TILE_SIZE = 32;
+  const mapWidthPx = currentMap.width * TILE_SIZE;
+  const mapHeightPx = currentMap.height * TILE_SIZE;
 
   // Camera Transform Logic
-  // Added transition to match EntityComponent for smooth scrolling
   const transformStyle = cameraPosition ? {
       transform: `translate3d(${cameraPosition.x}px, ${cameraPosition.y}px, 0) scale(${viewScale})`,
       transformOrigin: 'top left',
@@ -48,17 +48,21 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
 
   return (
     <div 
-      className="relative shadow-2xl bg-black border-4 border-stone-800 overflow-hidden" 
+      className="relative shadow-2xl bg-black border-4 border-stone-800 overflow-hidden box-content" 
       style={{ 
-          width: `${mapWidthRem}rem`, 
-          height: `${mapHeightRem}rem`,
+          width: `${mapWidthPx}px`, 
+          height: `${mapHeightPx}px`,
           ...transformStyle
       }}
     >
         {/* Tile Layer */}
         {currentMap.tiles.map((row, y) => row.map((tile, x) => {
             const isRevealed = gameState.exploration[gameState.currentMapId]?.[y]?.[x];
-            if (!isRevealed) return <div key={`${x}-${y}`} className="absolute w-8 h-8 bg-black z-40" style={{ left: `${x*2}rem`, top: `${y*2}rem` }} />;
+            
+            // Fog of War: Render null to let the black container show through
+            if (!isRevealed) {
+                return null;
+            }
             
             // Apply World Mods (Chopped Trees, Mined Rocks)
             let displayTile = tile;
@@ -77,9 +81,20 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
             }
 
             return (
-                <div key={`${x}-${y}`} className="absolute w-8 h-8" style={{ left: `${x * 2}rem`, top: `${y * 2}rem` }}>
+                <div 
+                    key={`${x}-${y}`} 
+                    className="absolute" 
+                    style={{ 
+                        left: `${x * TILE_SIZE}px`, 
+                        top: `${y * TILE_SIZE}px`,
+                        // Slight overlap to fix sub-pixel grid gaps between visible tiles
+                        width: '32.5px', 
+                        height: '32.5px',
+                        // FIX: Use filter instead of overlay to prevent stacking darkness on overlaps
+                        filter: isVisible ? 'none' : 'brightness(0.35) grayscale(0.2)'
+                    }}
+                >
                     <Tile type={displayTile} x={x} y={y} />
-                    {!isVisible && <div className="absolute inset-0 bg-black/60 z-20 pointer-events-none" />}
                 </div>
             );
         }))}
@@ -102,7 +117,13 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
             if ((entity.type === 'ENEMY' || entity.type === 'NPC') && !isVisible) return null;
 
             return (
-              <div key={entity.id} className={isVisible ? '' : 'opacity-50 grayscale'}>
+              <div 
+                key={entity.id} 
+                style={{
+                    // Use uniform filter for entities in fog to match terrain
+                    filter: isVisible ? 'none' : 'brightness(0.35) grayscale(0.2)'
+                }}
+              >
                   <EntityComponent 
                       entity={entity} 
                       animation={gameState.animations[entity.id]}
