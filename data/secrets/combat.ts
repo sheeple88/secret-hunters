@@ -41,5 +41,24 @@ export const COMBAT_SECRETS: Secret[] = [
         statBonus: { maxHp: 100 },
         perkId: 'tank',
         condition: (gs) => (gs.counters['damage_taken'] || 0) >= 5000
+    },
+    {
+        id: 'combat_apprentice',
+        type: 'COMBAT',
+        title: 'Combat Apprentice',
+        hint: 'Train your arm to strike true.',
+        description: 'Reach Level 10 Attack.',
+        statBonus: { str: 2 },
+        condition: (gs) => gs.skills['Attack'] && gs.skills['Attack'].level >= 10
+    },
+    {
+        id: 'heavy_hitter',
+        type: 'COMBAT',
+        title: 'Heavy Hitter',
+        hint: 'True power comes from within.',
+        description: 'Reach Level 20 Strength.',
+        statBonus: { str: 5 },
+        perkId: 'titan_grip',
+        condition: (gs) => gs.skills['Strength'] && gs.skills['Strength'].level >= 20
     }
 ];

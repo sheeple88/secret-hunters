@@ -1,5 +1,5 @@
 
-import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType } from './types';
+import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType, DamageType } from './types';
 import { ASSETS } from './assets';
 import { createWorld } from './systems/mapGenerator';
 import { uid } from './systems/mapUtils';
@@ -30,12 +30,12 @@ export const calculateXpForLevel = (level: number) => Math.floor(100 * Math.pow(
 export const calculateSkillLevel = (xp: number) => Math.max(1, Math.floor(Math.log(Math.max(xp, 10) / 10) / Math.log(1.12)) + 1);
 
 export const INITIAL_STATS: Stats = {
-  str: 5,
+  str: 5, // Now mostly for carrying cap / interaction requirements? Or minimal dmg?
   dex: 5,
   int: 5,
   regeneration: 1,
-  hp: 50,
-  maxHp: 50,
+  hp: 100, // Higher base HP for combat balance
+  maxHp: 100,
   xp: 0,
   level: 1,
   gold: 0,
@@ -43,8 +43,11 @@ export const INITIAL_STATS: Stats = {
 };
 
 export const INITIAL_SKILLS: Record<SkillName, Skill> = {
+  Attack: { name: 'Attack', level: 1, xp: 0 },
   Strength: { name: 'Strength', level: 1, xp: 0 },
-  Dexterity: { name: 'Dexterity', level: 1, xp: 0 },
+  Defence: { name: 'Defence', level: 1, xp: 0 },
+  Constitution: { name: 'Constitution', level: 10, xp: 1100 }, // Start with some HP
+  Dexterity: { name: 'Dexterity', level: 1, xp: 0 }, // For Ranged
   Agility: { name: 'Agility', level: 1, xp: 0 },
   Logging: { name: 'Logging', level: 1, xp: 0 },
   Mining: { name: 'Mining', level: 1, xp: 0 },
@@ -74,10 +77,9 @@ export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string
     ACCESSORY: { names: ['Ring', 'Amulet', 'Talisman', 'Charm', 'Necklace', 'Band', 'Pendant', 'Brooch'], statBias: ['str', 'dex', 'int', 'regeneration'] },
 };
 
-// Exponential Loot Tiers
 export const LOOT_TIERS = Array.from({ length: 100 }, (_, i) => ({
     name: i === 0 ? 'Broken' : i === 1 ? 'Common' : i === 2 ? 'Uncommon' : i === 3 ? 'Rare' : i === 4 ? 'Epic' : i === 5 ? 'Legendary' : i === 6 ? 'Mythic' : i === 7 ? 'Godly' : i === 8 ? 'Divine' : i === 9 ? 'Cosmic' : `Tier ${i}`,
-    mult: Math.pow(SCALE_FACTOR, i * 5), // Massive scaling
+    mult: Math.pow(SCALE_FACTOR, i * 5),
     minLvl: i * 5
 }));
 
@@ -99,71 +101,74 @@ export const ITEM_SUFFIXES = [
     { name: 'of Focus', stat: 'int' },
 ];
 
+// UPDATED WEAPON TEMPLATES WITH COMBAT STYLES
 export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
-    'Sword': { type: 'SWORD', minDmg: 3, maxDmg: 6, critChance: 0.05, critMult: 1.5, range: 1 },
-    'Claymore': { type: 'SWORD', minDmg: 6, maxDmg: 12, critChance: 0.05, critMult: 1.8, range: 1 },
-    'Katana': { type: 'SWORD', minDmg: 4, maxDmg: 8, critChance: 0.15, critMult: 2.0, range: 1 },
-    'Axe': { type: 'AXE', minDmg: 4, maxDmg: 8, critChance: 0.1, critMult: 2.0, range: 1 },
-    'Hammer': { type: 'MACE', minDmg: 8, maxDmg: 14, critChance: 0.05, critMult: 2.5, range: 1 },
-    'Mace': { type: 'MACE', minDmg: 5, maxDmg: 9, critChance: 0.05, critMult: 1.8, range: 1 },
-    'Dagger': { type: 'DAGGER', minDmg: 2, maxDmg: 4, critChance: 0.2, critMult: 2.5, range: 1, multiHitChance: 0.3 },
-    'Spear': { type: 'SPEAR', minDmg: 3, maxDmg: 7, critChance: 0.05, critMult: 1.5, range: 2 },
-    'Scythe': { type: 'SPEAR', minDmg: 5, maxDmg: 10, critChance: 0.1, critMult: 2.0, range: 2, cleave: true },
-    'Bow': { type: 'BOW', minDmg: 2, maxDmg: 6, critChance: 0.1, critMult: 1.5, range: 4 },
-    'Staff': { type: 'STAFF', minDmg: 2, maxDmg: 8, critChance: 0.05, critMult: 1.5, range: 3 },
-    'Wand': { type: 'STAFF', minDmg: 4, maxDmg: 6, critChance: 0.1, critMult: 1.5, range: 4 },
-    'Rod': { type: 'ROD', minDmg: 1, maxDmg: 3, critChance: 0.01, critMult: 1.2, range: 3 },
+    'Sword': { type: 'SWORD', damageType: 'SLASH', power: 10, accuracy: 10, critChance: 0.05, critMult: 1.5, range: 1 },
+    'Claymore': { type: 'SWORD', damageType: 'SLASH', power: 18, accuracy: 8, critChance: 0.05, critMult: 1.8, range: 1 },
+    'Katana': { type: 'SWORD', damageType: 'SLASH', power: 12, accuracy: 15, critChance: 0.15, critMult: 2.0, range: 1 },
+    'Axe': { type: 'AXE', damageType: 'SLASH', power: 14, accuracy: 8, critChance: 0.1, critMult: 2.0, range: 1 },
+    'Hammer': { type: 'MACE', damageType: 'CRUSH', power: 20, accuracy: 5, critChance: 0.05, critMult: 2.5, range: 1 },
+    'Mace': { type: 'MACE', damageType: 'CRUSH', power: 15, accuracy: 8, critChance: 0.05, critMult: 1.8, range: 1 },
+    'Dagger': { type: 'DAGGER', damageType: 'STAB', power: 6, accuracy: 20, critChance: 0.2, critMult: 2.5, range: 1, multiHitChance: 0.3 },
+    'Spear': { type: 'SPEAR', damageType: 'STAB', power: 12, accuracy: 12, critChance: 0.05, critMult: 1.5, range: 2 },
+    'Scythe': { type: 'SPEAR', damageType: 'SLASH', power: 16, accuracy: 8, critChance: 0.1, critMult: 2.0, range: 2, cleave: true },
+    'Bow': { type: 'BOW', damageType: 'RANGED', power: 10, accuracy: 15, critChance: 0.1, critMult: 1.5, range: 4 },
+    'Staff': { type: 'STAFF', damageType: 'MAGIC', power: 12, accuracy: 10, critChance: 0.05, critMult: 1.5, range: 3 },
+    'Wand': { type: 'STAFF', damageType: 'MAGIC', power: 10, accuracy: 12, critChance: 0.1, critMult: 1.5, range: 4 },
+    'Rod': { type: 'ROD', damageType: 'CRUSH', power: 5, accuracy: 5, critChance: 0.01, critMult: 1.2, range: 3 },
 };
 
 export interface MonsterStats {
     baseHp: number;
     baseDmg: number;
+    defence: number;
+    weakness?: DamageType;
     xpMod: number; // Multiplier for XP reward
 }
 
-// Base stats for monsters before level scaling
+// Updated Monster Templates with Weaknesses
 export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
-    // Critters (Low threat)
-    'Slime': { baseHp: 15, baseDmg: 2, xpMod: 0.8 },
-    'Rat': { baseHp: 10, baseDmg: 3, xpMod: 0.8 },
-    'Bat': { baseHp: 8, baseDmg: 2, xpMod: 0.8 },
-    'Snake': { baseHp: 12, baseDmg: 4, xpMod: 1.0 },
-    'Spider': { baseHp: 15, baseDmg: 3, xpMod: 1.0 },
-    'Scorpion': { baseHp: 18, baseDmg: 5, xpMod: 1.2 },
+    // Critters
+    'Slime': { baseHp: 15, baseDmg: 2, defence: 2, weakness: 'SLASH', xpMod: 0.8 },
+    'Rat': { baseHp: 10, baseDmg: 3, defence: 1, weakness: 'STAB', xpMod: 0.8 },
+    'Bat': { baseHp: 8, baseDmg: 2, defence: 5, weakness: 'RANGED', xpMod: 0.8 },
+    'Snake': { baseHp: 12, baseDmg: 4, defence: 3, weakness: 'SLASH', xpMod: 1.0 },
+    'Spider': { baseHp: 15, baseDmg: 3, defence: 3, weakness: 'CRUSH', xpMod: 1.0 },
+    'Scorpion': { baseHp: 18, baseDmg: 5, defence: 8, weakness: 'CRUSH', xpMod: 1.2 },
     
     // Humanoids / Mid-tier
-    'Goblin': { baseHp: 25, baseDmg: 4, xpMod: 1.2 },
-    'Skeleton': { baseHp: 30, baseDmg: 5, xpMod: 1.3 },
-    'Zombie': { baseHp: 40, baseDmg: 3, xpMod: 1.3 },
-    'Bandit': { baseHp: 35, baseDmg: 6, xpMod: 1.4 },
-    'Cultist': { baseHp: 30, baseDmg: 8, xpMod: 1.5 },
-    'Ghost': { baseHp: 20, baseDmg: 6, xpMod: 1.5 }, // High damage, low HP
+    'Goblin': { baseHp: 25, baseDmg: 4, defence: 5, weakness: 'SLASH', xpMod: 1.2 },
+    'Skeleton': { baseHp: 30, baseDmg: 5, defence: 10, weakness: 'CRUSH', xpMod: 1.3 },
+    'Zombie': { baseHp: 40, baseDmg: 3, defence: 2, weakness: 'SLASH', xpMod: 1.3 },
+    'Bandit': { baseHp: 35, baseDmg: 6, defence: 8, weakness: 'STAB', xpMod: 1.4 },
+    'Cultist': { baseHp: 30, baseDmg: 8, defence: 4, weakness: 'RANGED', xpMod: 1.5 },
+    'Ghost': { baseHp: 20, baseDmg: 6, defence: 50, weakness: 'MAGIC', xpMod: 1.5 }, 
     
     // Beasts
-    'Wolf': { baseHp: 30, baseDmg: 6, xpMod: 1.3 },
-    'Bear': { baseHp: 60, baseDmg: 8, xpMod: 1.8 },
-    'Minotaur': { baseHp: 100, baseDmg: 12, xpMod: 2.5 },
+    'Wolf': { baseHp: 30, baseDmg: 6, defence: 5, weakness: 'STAB', xpMod: 1.3 },
+    'Bear': { baseHp: 60, baseDmg: 8, defence: 15, weakness: 'MAGIC', xpMod: 1.8 },
+    'Minotaur': { baseHp: 100, baseDmg: 12, defence: 20, weakness: 'MAGIC', xpMod: 2.5 },
     
-    // High Tier / Magical
-    'Ice Golem': { baseHp: 80, baseDmg: 8, xpMod: 2.0 },
-    'Earth Golem': { baseHp: 100, baseDmg: 10, xpMod: 2.2 },
-    'Fire Elemental': { baseHp: 50, baseDmg: 15, xpMod: 2.0 },
-    'Specter': { baseHp: 40, baseDmg: 12, xpMod: 2.0 },
-    'Mimic': { baseHp: 60, baseDmg: 15, xpMod: 3.0 },
+    // High Tier
+    'Ice Golem': { baseHp: 80, baseDmg: 8, defence: 30, weakness: 'CRUSH', xpMod: 2.0 },
+    'Earth Golem': { baseHp: 100, baseDmg: 10, defence: 40, weakness: 'CRUSH', xpMod: 2.2 },
+    'Fire Elemental': { baseHp: 50, baseDmg: 15, defence: 10, weakness: 'MAGIC', xpMod: 2.0 },
+    'Specter': { baseHp: 40, baseDmg: 12, defence: 40, weakness: 'MAGIC', xpMod: 2.0 },
+    'Mimic': { baseHp: 60, baseDmg: 15, defence: 20, weakness: 'CRUSH', xpMod: 3.0 },
     
     // Boss Tier
-    'Knight': { baseHp: 120, baseDmg: 15, xpMod: 3.0 },
-    'Mage': { baseHp: 60, baseDmg: 20, xpMod: 3.0 },
-    'Lich': { baseHp: 150, baseDmg: 20, xpMod: 4.0 },
-    'Dragon': { baseHp: 300, baseDmg: 25, xpMod: 5.0 },
-    'Beholder': { baseHp: 180, baseDmg: 22, xpMod: 4.5 },
-    'Kraken': { baseHp: 250, baseDmg: 20, xpMod: 5.0 },
-    'Vampire': { baseHp: 100, baseDmg: 18, xpMod: 3.5 },
+    'Knight': { baseHp: 120, baseDmg: 15, defence: 50, weakness: 'MAGIC', xpMod: 3.0 },
+    'Mage': { baseHp: 60, baseDmg: 20, defence: 10, weakness: 'SLASH', xpMod: 3.0 },
+    'Lich': { baseHp: 150, baseDmg: 20, defence: 30, weakness: 'RANGED', xpMod: 4.0 },
+    'Dragon': { baseHp: 300, baseDmg: 25, defence: 60, weakness: 'STAB', xpMod: 5.0 },
+    'Beholder': { baseHp: 180, baseDmg: 22, defence: 20, weakness: 'RANGED', xpMod: 4.5 },
+    'Kraken': { baseHp: 250, baseDmg: 20, defence: 30, weakness: 'MAGIC', xpMod: 5.0 },
+    'Vampire': { baseHp: 100, baseDmg: 18, defence: 20, weakness: 'STAB', xpMod: 3.5 },
     
-    // Dungeon Bosses (Implicitly detected by prefix or context, but here for reference)
-    'Crypt Lord': { baseHp: 400, baseDmg: 25, xpMod: 10.0 },
-    'Brood Mother': { baseHp: 350, baseDmg: 30, xpMod: 10.0 },
-    'Molten King': { baseHp: 500, baseDmg: 35, xpMod: 10.0 },
+    // Dungeon Bosses
+    'Crypt Lord': { baseHp: 400, baseDmg: 25, defence: 40, weakness: 'CRUSH', xpMod: 10.0 },
+    'Brood Mother': { baseHp: 350, baseDmg: 30, defence: 30, weakness: 'MAGIC', xpMod: 10.0 },
+    'Molten King': { baseHp: 500, baseDmg: 35, defence: 60, weakness: 'RANGED', xpMod: 10.0 },
 };
 
 export const ITEMS: Record<string, Item> = {
@@ -213,7 +218,7 @@ export const ITEMS: Record<string, Item> = {
     // Equipment
     'fishing_rod': { id: 'fishing_rod', name: 'Old Fishing Rod', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Use near water to catch fish.', count: 1, weaponStats: WEAPON_TEMPLATES['Rod'], value: 20 },
     'sword_training': { id: 'sword_training', name: 'Training Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A dull sword.', count: 1, weaponStats: WEAPON_TEMPLATES['Sword'], value: 5 },
-    'sword_iron': { id: 'sword_iron', name: 'Iron Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A sturdy iron sword.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], minDmg: 5, maxDmg: 9 }, value: 50 },
+    'sword_iron': { id: 'sword_iron', name: 'Iron Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A sturdy iron sword.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 15 }, value: 50 },
     'relic': { id: 'relic', name: 'Ancient Relic', type: 'COLLECTIBLE', description: 'A glowing orb from the past.', count: 1, value: 100 },
     
     // Collectibles

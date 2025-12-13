@@ -13,8 +13,9 @@ import { handlePlayerMove } from './systems/movement';
 import { generateBossRewards, generateLoot } from './services/itemService';
 import { generateHavensRest } from './systems/maps/havensRest';
 import { checkQuestUpdate } from './systems/questUtils';
-import { resolveCombat } from './systems/combatService';
-import { processEnemyTurns, processSpawners } from './systems/ai';
+// NEW: Modular Combat Systems
+import { handlePlayerAttack } from './systems/combat/playerAttack';
+import { processEnemyTurn } from './systems/combat/enemyAI';
 
 // --- Helper Functions ---
 const getTimestamp = () => Date.now();
@@ -518,110 +519,45 @@ export default function App() {
           let newStats = { ...prev.stats };
           let newSkills = { ...prev.skills };
           let completedQuestIds = [...prev.completedQuestIds];
-          let newCombatTime = prev.lastCombatTime;
           let newBestiary = [...prev.bestiary];
           let nextMapEntities = [...map.entities];
           let newCombatNumbers = { ...combatNumbers };
-          let newWorldTier = prev.worldTier;
+          // Fix: Added missing variable
+          let newCombatTime = prev.lastCombatTime;
 
           if (entity) {
-              // --- COMBAT INTERACTION ---
+              // --- COMBAT INTERACTION (New Modular Logic) ---
               if (entity.type === 'ENEMY' || entity.subType === 'MOB_SPAWNER') {
-                  const result = resolveCombat(prev, entity, prev.worldTier);
+                  const { newState, damageEvents } = handlePlayerAttack(prev);
                   
-                  playSound(result.isHit ? 'ATTACK' : 'WALK'); // Woosh sound for miss?
-                  newAnimations['player'] = 'ATTACK';
-                  newCombatTime = Date.now();
+                  // Immediately process enemy turn to retaliate
+                  // We need to merge states properly
+                  const mergedState = { ...newState };
+                  const mapAfterPlayer = MAPS[mergedState.currentMapId];
                   
-                  if (result.isHit) {
-                      newAnimations[entity.id] = 'HURT';
-                      newCombatNumbers[entity.id] = result.damage;
-                      // Update Entity HP
-                      const newEnemyHp = (entity.hp || 10) - result.damage;
-                      
-                      // Process XP
-                      result.xpGained.forEach(g => {
-                          const skill = newSkills[g.skill];
-                          const newXp = skill.xp + g.amount;
-                          const newLevel = calculateSkillLevel(newXp);
-                          if (newLevel > skill.level) {
-                              playSound('LEVEL_UP');
-                              newLogs.push({ id: uid(), message: `${g.skill} reached level ${newLevel}!`, type: 'SKILL', timestamp: getTimestamp() });
-                              // HP Increase for Constitution
-                              if (g.skill === 'Constitution') {
-                                  newStats.maxHp = Math.floor(10 * Math.pow(SCALE_FACTOR, newLevel)) + 50; // Recalculate
-                              }
-                          }
-                          newSkills[g.skill] = { ...skill, xp: newXp, level: newLevel };
-                      });
-
-                      if (newEnemyHp <= 0) {
-                          // KILL
-                          playSound('KILL');
-                          nextMapEntities = nextMapEntities.filter(e => e.id !== entity.id);
-                          newLogs.push({ id: uid(), message: `${entity.name} defeated!`, type: 'COMBAT', timestamp: getTimestamp() });
-                          
-                          if (entity.type === 'ENEMY') {
-                              newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
-                              const qUpd = checkQuestUpdate(newActiveQuest, 'KILL', entity.name, 1);
-                              if (qUpd) {
-                                  newActiveQuest = qUpd.newQuest;
-                                  if (qUpd.log) newLogs.push(qUpd.log);
-                              }
-                          }
-
-                          // Boss Drop
-                          if (entity.subType === 'BOSS') {
-                               nextMapEntities.push({
-                                   id: `drop_${uid()}`,
-                                   name: 'Skull Key',
-                                   type: 'ITEM_DROP',
-                                   loot: 'boss_key',
-                                   symbol: 'k',
-                                   color: 'yellow',
-                                   pos: entity.pos
-                               });
-                               newLogs.push({ id: uid(), message: `${entity.name} dropped a Key!`, type: 'SECRET', timestamp: getTimestamp() });
-                               newWorldTier++;
-                               playSound('SECRET');
-                               newLogs.push({ id: uid(), message: `THE WORLD GROWS DARKER... (World Tier ${newWorldTier})`, type: 'SECRET', timestamp: getTimestamp() });
-                          }
-
-                          // Loot Drop
-                          let baseName = entity.name.split(' ').pop() || 'Slime';
-                          if (['King', 'Lord', 'Mother', 'Dragon', 'Beholder', 'Lich'].some(k => entity.name.includes(k))) {
-                               if (MONSTER_TEMPLATES[entity.name]) baseName = entity.name;
-                               else {
-                                   const match = Object.keys(MONSTER_TEMPLATES).find(k => entity.name.includes(k));
-                                   if (match) baseName = match;
-                               }
-                          }
-                          
-                          const drop = generateLoot(entity.level || 1, entity.name, entity.subType === 'BOSS' ? 0.5 : 0);
-                          if (drop) {
-                              newInventory = addToInventory(prepareItemForInventory(drop), { ...prev, inventory: newInventory });
-                              newLogs.push({ id: uid(), message: `Looted: ${drop.name}`, type: 'LOOT', timestamp: getTimestamp() });
-                          }
-                          
-                          // Gold & XP (General)
-                          newStats.xp += (entity.level || 1) * 10;
-                          newStats.gold += (entity.level || 1) * 2;
-
-                          if (!newBestiary.includes(entity.name)) newBestiary.push(entity.name);
-
-                      } else {
-                          // Update Entity in List
-                          const idx = nextMapEntities.findIndex(e => e.id === entity.id);
-                          if (idx !== -1) nextMapEntities[idx] = { ...entity, hp: newEnemyHp };
-                      }
-                  } else {
-                      newAnimations[entity.id] = 'DODGE';
-                      newLogs.push({ id: uid(), message: "You missed!", type: 'COMBAT', timestamp: getTimestamp() });
+                  // Fix: Removed 'numbers' property from destructuring as it doesn't exist on TurnResult
+                  const { updatedEntities, damageToPlayer, logs: enemyLogs, animations: enemyAnims } 
+                      = processEnemyTurn(mergedState, mapAfterPlayer); 
+                  
+                  // Update Map Entities
+                  MAPS[mergedState.currentMapId].entities = updatedEntities;
+                  
+                  if (damageToPlayer > 0) {
+                      mergedState.stats.hp -= damageToPlayer;
+                      mergedState.counters.damage_taken = (mergedState.counters.damage_taken || 0) + damageToPlayer;
+                      if (mergedState.stats.hp <= 0) setActiveModal('DEATH');
                   }
                   
-                  // Update map
-                  const currentMapClone = { ...map, entities: nextMapEntities };
-                  MAPS[prev.currentMapId] = currentMapClone;
+                  // Merge logs/anims
+                  mergedState.logs = [...mergedState.logs, ...enemyLogs];
+                  mergedState.animations = { ...mergedState.animations, ...enemyAnims };
+                  
+                  // UI Updates
+                  const finalDamageEvents = { ...damageEvents };
+                  if (damageToPlayer > 0) finalDamageEvents['player'] = damageToPlayer;
+                  setCombatNumbers(finalDamageEvents);
+
+                  return mergedState;
               }
               else if (entity.type === 'NPC') {
                   playSound('UI_CLICK');
@@ -808,7 +744,6 @@ export default function App() {
               completedQuestIds,
               lastCombatTime: newCombatTime,
               bestiary: newBestiary,
-              worldTier: newWorldTier
           };
       });
   }, [activeDialogue, activePuzzle, activeModal]);
@@ -817,15 +752,19 @@ export default function App() {
       setGameState(prev => {
           if (activePuzzle || activeDialogue) return prev;
           
-          let nextState = handlePlayerMove(prev, dx, dy, handleOpenModal);
-          nextState = checkLevelUp(nextState);
+          const { newState, damageEvents } = handlePlayerMove(prev, dx, dy, handleOpenModal);
+          const finalState = checkLevelUp(newState);
           
-          if (Object.keys(nextState.animations).length > 0) {
+          if (Object.keys(damageEvents).length > 0) {
+              setCombatNumbers(damageEvents);
+          }
+
+          if (Object.keys(finalState.animations).length > 0) {
               setTimeout(() => {
                   setGameState(p => ({ ...p, animations: {} }));
               }, 400);
           }
-          return nextState;
+          return finalState;
       });
   }, [activePuzzle, activeDialogue, checkLevelUp]);
 

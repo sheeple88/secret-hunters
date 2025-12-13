@@ -37,7 +37,7 @@ export const processSpawners = (
     entities: Entity[],
     currentMap: GameMap,
     playerPos: Position,
-    currentStep: number // Added step tracker
+    currentStep: number 
 ): Entity[] => {
     const now = Date.now();
     let newEntities = [...entities];
@@ -45,14 +45,10 @@ export const processSpawners = (
     entities.forEach((entity, index) => {
         if (entity.subType !== 'MOB_SPAWNER') return;
 
-        // Check cooldown (Spawn every 3s OR 5 steps)
+        // Check cooldown (Spawn every 30s)
         const timeDiff = now - (entity.lastSpawnTime || 0);
-        const stepDiff = currentStep - (entity.lastSpawnStep || 0);
         
-        const isTimeReady = timeDiff >= 3000;
-        const isStepReady = stepDiff >= 5;
-
-        if (!isTimeReady && !isStepReady) return;
+        if (timeDiff < 30000) return;
 
         // Find empty adjacent spot
         const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
@@ -77,8 +73,8 @@ export const processSpawners = (
 
         if (spawnPos) {
             const type = entity.spawnType || 'Slime';
-            // Update lastSpawnTime and lastSpawnStep in the original array reference through newEntities logic
-            newEntities[index] = { ...entity, lastSpawnTime: now, lastSpawnStep: currentStep };
+            // Update lastSpawnTime
+            newEntities[index] = { ...entity, lastSpawnTime: now };
             
             const level = entity.level || 1;
             
@@ -97,7 +93,9 @@ export const processSpawners = (
                 maxHp: hp,
                 level,
                 aiType: 'MELEE',
-                isSpawned: true // Flags for reduced rewards
+                isSpawned: true,
+                defence: template.defence,
+                weakness: template.weakness
             });
         }
     });
@@ -128,16 +126,34 @@ export const processEnemyTurns = (
         occupied.add(`${e.pos.x},${e.pos.y}`);
     });
 
+    // Player Defence Roll
+    const playerDef = currentState.skills.Defence.level; // Simplified player defense logic for now
+    const armorBonus = Object.values(currentState.equipment).reduce((acc, item) => acc + (item?.stats?.hp ? Math.floor(item.stats.hp / 10) : 0), 0); // Rough proxy for armor until stat split
+    const effectivePlayerDef = playerDef + armorBonus;
+
     entities = entities.map(entity => {
         if (entity.type !== 'ENEMY') return entity;
         
         occupied.delete(`${entity.pos.x},${entity.pos.y}`);
 
         const dist = Math.abs(entity.pos.x - nextPlayerPos.x) + Math.abs(entity.pos.y - nextPlayerPos.y);
-        const aggro = entity.aggroRange || 5;
+        const aggro = entity.aggroRange || 6; // Increased default aggro
         const range = entity.attackRange || 1;
         
+        // Passive Roam vs Chase
         if (dist > aggro) {
+            // Roam randomly (10% chance)
+            if (Math.random() < 0.1) {
+                const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
+                const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+                const nx = entity.pos.x + dx;
+                const ny = entity.pos.y + dy;
+                
+                if (nx >= 0 && nx < currentMap.width && ny >= 0 && ny < currentMap.height && !BLOCKED_TILES.includes(currentMap.tiles[ny][nx]) && !occupied.has(`${nx},${ny}`)) {
+                    occupied.add(`${nx},${ny}`);
+                    return { ...entity, pos: { x: nx, y: ny } };
+                }
+            }
             occupied.add(`${entity.pos.x},${entity.pos.y}`);
             return entity;
         }
@@ -156,13 +172,10 @@ export const processEnemyTurns = (
         if (canAttack) {
             playSound('HIT');
             
-            // --- ENEMY DAMAGE CALCULATION ---
-            // 1. Identify Base Type from Name (e.g. "Angry Rat" -> "Rat")
-            let baseName = entity.name.split(' ').pop() || 'Slime'; // Basic heuristics
+            // --- ENEMY DAMAGE CALCULATION (Simplified RS Style) ---
+            let baseName = entity.name.split(' ').pop() || 'Slime';
             if (['King', 'Lord', 'Mother', 'Dragon', 'Beholder', 'Lich'].some(k => entity.name.includes(k))) {
-                // Keep full name for bosses if mapped
                 if (MONSTER_TEMPLATES[entity.name]) baseName = entity.name;
-                // Otherwise try finding partial match in keys
                 else {
                     const match = Object.keys(MONSTER_TEMPLATES).find(k => entity.name.includes(k));
                     if (match) baseName = match;
@@ -172,19 +185,46 @@ export const processEnemyTurns = (
             const template = MONSTER_TEMPLATES[baseName] || MONSTER_TEMPLATES['Slime'];
             const level = entity.level || 1;
             
-            // Formula: BaseDamage * (1.15 ^ Level)
-            // Minimum 1 damage
-            const eDmg = Math.max(1, Math.floor(template.baseDmg * Math.pow(SCALE_FACTOR, level)));
+            // Enemy Max Hit
+            const eMaxHit = Math.max(1, Math.floor(template.baseDmg * Math.pow(SCALE_FACTOR, level)));
             
-            damageToPlayer += eDmg;
-            anims[entity.id] = range > 1 ? 'SHOOT' : 'ATTACK';
-            anims['player'] = 'HURT';
-            numbers['player'] = (numbers['player'] || 0) + eDmg;
-            logs.push({ id: uid(), message: `${entity.name} hit you for ${eDmg}!`, type: 'COMBAT', timestamp: Date.now() });
+            // Enemy Accuracy (Levels + World Tier)
+            const eAcc = Math.floor(level * (1 + currentState.worldTier * 0.2) * 50);
+            const pDefRoll = Math.floor(effectivePlayerDef * 64);
+            
+            let hitChance = 0;
+            if (eAcc > pDefRoll) {
+                hitChance = 1 - (pDefRoll + 2) / (2 * (eAcc + 1));
+            } else {
+                hitChance = eAcc / (2 * (pDefRoll + 1));
+            }
+            
+            const isHit = Math.random() < hitChance;
+            let dmg = 0;
+            
+            if (isHit) {
+                dmg = Math.floor(Math.random() * (eMaxHit + 1));
+                if (dmg === 0) dmg = 1;
+                
+                // Iron Skin perk check
+                if (currentState.equippedPerks.includes('iron_skin')) dmg = Math.max(0, dmg - 1);
+            }
+
+            if (dmg > 0) {
+                damageToPlayer += dmg;
+                anims[entity.id] = range > 1 ? 'SHOOT' : 'ATTACK';
+                anims['player'] = 'HURT';
+                numbers['player'] = (numbers['player'] || 0) + dmg;
+                logs.push({ id: uid(), message: `${entity.name} hit you for ${dmg}!`, type: 'COMBAT', timestamp: Date.now() });
+            } else {
+                anims[entity.id] = range > 1 ? 'SHOOT' : 'ATTACK';
+                anims['player'] = 'DODGE'; // Show Miss
+            }
             
             occupied.add(`${entity.pos.x},${entity.pos.y}`);
             return entity;
         } else {
+            // CHASE LOGIC
             let dx = nextPlayerPos.x - entity.pos.x;
             let dy = nextPlayerPos.y - entity.pos.y;
             let nextX = entity.pos.x;
@@ -192,6 +232,7 @@ export const processEnemyTurns = (
 
             const tryX = Math.abs(dx) > Math.abs(dy) || (Math.abs(dx) === Math.abs(dy) && Math.random() > 0.5);
             
+            // Attempt to move towards player
             if (tryX) {
                 nextX += dx > 0 ? 1 : -1;
             } else {
@@ -207,6 +248,7 @@ export const processEnemyTurns = (
             
             if (!blocked && occupied.has(`${nextX},${nextY}`)) blocked = true;
 
+            // Simple pathfinding fallback: try other axis
             if (blocked) {
                 nextX = entity.pos.x;
                 nextY = entity.pos.y;

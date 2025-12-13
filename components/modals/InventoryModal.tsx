@@ -108,7 +108,7 @@ const ItemTooltip = ({ item, equippedItem }: { item: Item, equippedItem?: Item |
 
                         return (
                             <>
-                                {renderWepDiff('Damage', ws.maxDmg, es?.maxDmg)} 
+                                {renderWepDiff('Power', ws.power, es?.power)} 
                                 {renderWepDiff('Range', ws.range, es?.range)}
                                 {renderWepDiff('Crit %', ws.critChance, es?.critChance, true)}
                                 {ws.cleave && <div className="text-xs text-yellow-500 font-bold">Cleave (AoE)</div>}

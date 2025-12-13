@@ -13,7 +13,7 @@ export type Stats = {
   regeneration: number;
   hp: number;
   maxHp: number;
-  xp: number;
+  xp: number; // General Level XP
   level: number;
   gold: number;
   unspentStatPoints: number;
@@ -21,7 +21,8 @@ export type Stats = {
 
 export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
 
-export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
+// Added Attack, Strength, Defence, Constitution
+export type SkillName = 'Attack' | 'Strength' | 'Defence' | 'Constitution' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
 
 export interface Skill {
   name: SkillName;
@@ -45,17 +46,20 @@ export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY' 
 export type EquipmentSlot = 'HEAD' | 'BODY' | 'LEGS' | 'WEAPON' | 'OFFHAND' | 'ACCESSORY';
 export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC' | 'GODLY' | 'DIVINE' | 'COSMIC' | 'ETERNAL';
 export type WeaponType = 'SWORD' | 'AXE' | 'MACE' | 'DAGGER' | 'SPEAR' | 'BOW' | 'STAFF' | 'ROD';
+export type DamageType = 'SLASH' | 'STAB' | 'CRUSH' | 'MAGIC' | 'RANGED';
 
 export interface WeaponStats {
     type: WeaponType;
-    minDmg: number;
-    maxDmg: number;
+    damageType: DamageType;
+    power: number; // Replaces min/max for standardized calculation
+    accuracy: number;
     critChance: number;
     critMult: number;
     range: number;
     cleave?: boolean;
     multiHitChance?: number;
     magicType?: MagicType;
+    attackSpeed?: number; // Not fully utilized yet, but good for future
 }
 
 export interface Item {
@@ -83,23 +87,21 @@ export interface Perk {
   specialEffect?: 'VISION_PLUS' | 'LAVA_RESIST' | 'XP_BOOST' | 'GOLD_BOOST' | 'AUTO_HEAL' | 'SECRET_SENSE' | 'NIGHT_VISION';
 }
 
-// --- NEW DATA STRUCTURES ---
-
 export interface Achievement {
   id: string;
   title: string;
-  description: string; // Explicit instruction (e.g., "Kill 100 Skeletons")
+  description: string;
   reward: { gold?: number; xp?: number; itemId?: string };
   condition: (gameState: GameState) => boolean;
-  progress?: (gameState: GameState) => number; // 0.0 to 1.0 for progress bar
+  progress?: (gameState: GameState) => number;
 }
 
 export interface Secret {
   id: string;
   type: 'COMBAT' | 'WORLD' | 'INTERACTION';
   title: string;
-  hint: string; // Cryptic clue (e.g., "The dead fear the light")
-  description: string; // Revealed ONLY after unlock
+  hint: string;
+  description: string;
   statBonus?: Partial<Stats>;
   perkId?: string;
   condition: (gameState: GameState) => boolean;
@@ -132,6 +134,8 @@ export interface Entity {
   pos: Position;
   hp?: number;
   maxHp?: number;
+  defence?: number; // New: Flat defence or roll base
+  weakness?: DamageType; // New: Weakness type
   level?: number;
   dialogue?: string[];
   facing?: Direction;
@@ -184,10 +188,9 @@ export interface GameState {
   inventory: Item[];
   knownRecipes: string[];
   
-  // Refactored Progress Tracking
-  unlockedSecretIds: string[]; // List of IDs
-  unlockedAchievementIds: string[]; // List of IDs
-  completedQuestIds: string[]; // List of IDs
+  unlockedSecretIds: string[];
+  unlockedAchievementIds: string[];
+  completedQuestIds: string[];
   
   unlockedPerks: string[];
   equippedPerks: string[];
@@ -196,8 +199,11 @@ export interface GameState {
   logs: LogEntry[];
   flags: Record<string, boolean>;
   lastAction: string | null;
+  
   isCombat: boolean;
+  lastCombatTime: number; // For regen pause
   combatTargetId: string | null;
+  
   activeQuest: Quest | null;
   exploration: Record<string, number[][]>;
   worldModified: Record<string, Record<string, TileType>>;

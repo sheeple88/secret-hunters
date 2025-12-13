@@ -93,16 +93,15 @@ export const generateLoot = (level: number, sourceName: string, rarityBoost: num
         const baseWeapon = WEAPON_TEMPLATES[baseName] || WEAPON_TEMPLATES['Sword'];
         weaponStats = {
             ...baseWeapon,
-            minDmg: Math.ceil(baseWeapon.minDmg * multiplier),
-            maxDmg: Math.ceil(baseWeapon.maxDmg * multiplier),
+            power: Math.ceil(baseWeapon.power * multiplier),
         };
         
         if (['RARE', 'EPIC', 'LEGENDARY'].includes(rarity)) {
-            weaponStats.maxDmg = Math.floor(weaponStats.maxDmg * 1.2);
+            weaponStats.power = Math.floor(weaponStats.power * 1.2);
             weaponStats.critChance += 0.05;
         }
         if (['MYTHIC', 'GODLY', 'DIVINE', 'COSMIC'].includes(rarity)) {
-            weaponStats.maxDmg = Math.floor(weaponStats.maxDmg * 2);
+            weaponStats.power = Math.floor(weaponStats.power * 2);
             weaponStats.critMult += 1.0;
             weaponStats.multiHitChance = 0.5;
         }
