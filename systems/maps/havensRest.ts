@@ -144,7 +144,18 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
     // Smithy (North East): x=30, y=3
     const intSmith = generateInterior('interior_smith', "The Anvil", { mapId: id, x: 0, y: 0, name: "Haven's Rest" });
     intSmith.entities.push({ id: 'anvil_shop', name: 'Anvil', type: 'OBJECT', subType: 'ANVIL', symbol: 'T', color: 'gray', pos: {x: 5, y: 4} });
-    intSmith.entities.push({ id: 'npc_smith', name: 'Blacksmith', type: 'NPC', symbol: 'B', color: 'gray', pos: {x: 3, y: 4}, dialogue: ["Need weapons forged?"] });
+    
+    // NPC with QUEST
+    intSmith.entities.push({ 
+        id: 'npc_smith', 
+        name: 'Blacksmith', 
+        type: 'NPC', 
+        symbol: 'B', 
+        color: 'gray', 
+        pos: {x: 3, y: 4}, 
+        questId: 'iron_shortage' // QUEST ID ASSIGNED
+    });
+    
     maps[intSmith.id] = intSmith;
 
     const smithDoor = buildBuilding(30, 3, 6, 5, "Blacksmith", intSmith.id);
@@ -204,8 +215,8 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
     // NPCs
     entities.push(
         { id: 'mayor_start', name: 'Mayor', type: 'NPC', symbol: 'M', color: 'blue', pos: {x: 20, y: 10}, dialogue: ["Welcome to Haven's Rest!", "The roads are clear now."] },
-        { id: 'guard_n', name: 'Town Guard', type: 'NPC', symbol: 'G', color: 'red', pos: {x: 21, y: 2}, dialogue: ["North lies the Frostlands."] },
-        { id: 'guard_s', name: 'Town Guard', type: 'NPC', symbol: 'G', color: 'red', pos: {x: 19, y: 27}, dialogue: ["South lies the Desert."] },
+        { id: 'guard_n', name: 'Town Guard', type: 'NPC', symbol: 'G', color: 'red', pos: {x: 21, y: 2}, questId: 'slime_hunter' },
+        { id: 'guard_s', name: 'Town Guard', type: 'NPC', symbol: 'G', color: 'red', pos: {x: 19, y: 27}, questId: 'rat_catcher' },
         { id: 'citizen_1', name: 'Villager', type: 'NPC', symbol: 'V', color: 'green', pos: {x: 16, y: 16}, dialogue: ["Lovely weather."] },
         { id: 'sign_square', name: 'Town Square', type: 'OBJECT', subType: 'SIGNPOST', symbol: 'S', color: 'brown', pos: {x: 19, y: 15}, destination: { mapId: '', x:0, y:0, name: 'Market East, Homes West'} }
     );

@@ -5,6 +5,7 @@ import { playSound } from '../services/audioService';
 import { generateLoot } from '../services/itemService';
 import { processEnemyTurns, processSpawners } from './ai';
 import { generateDungeon } from './mapGenerator';
+import { checkQuestUpdate } from './questUtils';
 
 const BLOCKED_TILES = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'SHRINE', 'VOID', 'WATER', 'CACTUS', 'DEEP_WATER', 'OBSIDIAN', 'CRACKED_WALL', 'ROOF'];
 const TREE_TYPES = ['TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE'];
@@ -156,6 +157,7 @@ export const handlePlayerMove = (
     let newBestiary = [...prev.bestiary];
     let nextMapEntities = [...targetMap.entities];
     let newWorldTier = prev.worldTier || 0; // Track World Tier
+    let newActiveQuest = prev.activeQuest;
 
     // Transition Logging
     if (didTransition) {
@@ -254,7 +256,14 @@ export const handlePlayerMove = (
            newMapMod[`${nextPos.y},${nextPos.x}`] = isTree ? 'STUMP' : 'FLOOR';
            newWorldMod[nextMapId] = newMapMod;
 
-           return { ...prev, playerFacing: facing, stats: newStats, skills: newSkills, inventory: newInventory, worldModified: newWorldMod, counters: newCounters };
+           // QUEST UPDATE: Gathering
+           const qUpd = checkQuestUpdate(newActiveQuest, 'COLLECT', itemId, 1);
+           if (qUpd) {
+               newActiveQuest = qUpd.newQuest;
+               if (qUpd.log) combatLogs.push(qUpd.log);
+           }
+
+           return { ...prev, playerFacing: facing, stats: newStats, skills: newSkills, inventory: newInventory, worldModified: newWorldMod, counters: newCounters, activeQuest: newActiveQuest, logs: [...combatLogs, ...prev.logs].slice(0,100) };
        }
        // If blocked and not gatherable, we already returned above
    }
@@ -270,8 +279,6 @@ export const handlePlayerMove = (
            if (item) {
                const pickupItem = { ...item };
                // ONLY assign new UID if it's NOT a stackable generic item (Key, Material, Consumable, GADGET, BLUEPRINT)
-               // This ensures 'boss_key' stays 'boss_key' so checks work
-               // Added GADGET and BLUEPRINT to stackable list so they keep their IDs
                if (!['MATERIAL', 'CONSUMABLE', 'JUNK', 'KEY', 'COLLECTIBLE', 'GADGET', 'BLUEPRINT'].includes(item.type)) {
                    pickupItem.id = uid();
                }
@@ -299,10 +306,8 @@ export const handlePlayerMove = (
            }
        }
        
-       // Check if this entity acts as a teleporter (has destination AND valid mapId)
-       // This handles the STAIRS_UP exit from dungeons too
+       // Teleport Logic
        else if (entity.destination && entity.destination.mapId && MAPS[entity.destination.mapId]) {
-           // Teleport Logic ... (Preserved)
            playSound('UI_CLICK');
            const dest = entity.destination;
            let newExp = { ...prev.exploration };
@@ -352,7 +357,7 @@ export const handlePlayerMove = (
                skillUsed = 'Dexterity';
            } else if (['STAFF', 'ROD'].includes(weapon.type)) {
                scalingStat = prev.stats.int;
-               skillUsed = 'Agility'; // Or 'Magic' if we had it, fallback to agility for now or just generic XP
+               skillUsed = 'Agility'; 
            }
 
            // Damage Formula: (Weapon Base + Random Var) + (Stat * 1.0)
@@ -361,7 +366,6 @@ export const handlePlayerMove = (
            
            if (Math.random() < weapon.critChance) {
                dmg = Math.floor(dmg * weapon.critMult);
-               // Add visual flair for crit later?
            }
 
            const newEnemyHp = (entity.hp || 10) - dmg;
@@ -381,7 +385,16 @@ export const handlePlayerMove = (
                nextMapEntities = nextMapEntities.filter(e => e.id !== entity!.id);
                combatLogs.push({ id: uid(), message: `${entity!.name} destroyed!`, type: 'COMBAT', timestamp: Date.now() });
                
-               if (entity.type === 'ENEMY') newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
+               if (entity.type === 'ENEMY') {
+                   newCounters.enemies_killed = (newCounters.enemies_killed || 0) + 1;
+                   
+                   // QUEST UPDATE: Kill
+                   const qUpd = checkQuestUpdate(newActiveQuest, 'KILL', entity.name, 1);
+                   if (qUpd) {
+                       newActiveQuest = qUpd.newQuest;
+                       if (qUpd.log) combatLogs.push(qUpd.log);
+                   }
+               }
                
                // BOSS DROP LOGIC
                if (entity.subType === 'BOSS') {
@@ -399,7 +412,7 @@ export const handlePlayerMove = (
                    
                    // WORLD TIER INCREASE EVENT
                    newWorldTier++;
-                   playSound('SECRET'); // Reuse sound or new one
+                   playSound('SECRET'); 
                    combatLogs.push({ 
                        id: uid(), 
                        message: `THE WORLD GROWS DARKER... (World Tier ${newWorldTier})`, 
@@ -408,14 +421,10 @@ export const handlePlayerMove = (
                    });
                }
 
-               // XP and Gold Calculation (EXPONENTIAL)
-               // Look up base XP mod from templates if possible
-               // Extract base name logic
+               // XP and Gold Calculation
                let baseName = entity.name.split(' ').pop() || 'Slime';
                if (['King', 'Lord', 'Mother', 'Dragon', 'Beholder', 'Lich'].some(k => entity.name.includes(k))) {
-                   // Keep full name for bosses if mapped
                    if (MONSTER_TEMPLATES[entity.name]) baseName = entity.name;
-                   // Otherwise try finding partial match in keys
                    else {
                        const match = Object.keys(MONSTER_TEMPLATES).find(k => entity.name.includes(k));
                        if (match) baseName = match;
@@ -435,12 +444,10 @@ export const handlePlayerMove = (
                }
                
                if (entity.subType === 'MOB_SPAWNER') {
-                   // Spawners give decent XP for destroying
                    xpGain = Math.floor(100 * Math.pow(SCALE_FACTOR, entity.level || 1));
                    goldGain = 0;
                }
                
-               // Boss XP Bonus handled by template XP Mod usually, but safe to boost
                if (entity.subType === 'BOSS') {
                    xpGain *= 2; 
                    goldGain *= 2;
@@ -450,17 +457,12 @@ export const handlePlayerMove = (
                newStats.gold += goldGain;
                
                // Drop Calculation
-               // If spawned, drop chance is reduced to 25% of normal
                if (Math.random() < (entity.isSpawned ? 0.25 : 1.0)) {
-                   // If in a Dungeon, boost rarity!
                    const isDungeon = targetMap.biome === 'DUNGEON';
-                   // Boss always drops rare+
                    const rarityBoost = entity.subType === 'BOSS' ? 0.5 : (isDungeon ? 0.2 : 0); 
                    
                    const loot = generateLoot(entity.level || 1, entity.name, rarityBoost);
                    if (loot) {
-                       // Boss drop is usually equipment, pushed to inventory
-                       const existing = newInventory.find(i => i.id === loot.id); 
                        newInventory.push(loot); 
                        combatLogs.push({ id: uid(), message: `Looted: ${loot.name}`, type: 'LOOT', timestamp: Date.now() });
                    }
@@ -468,17 +470,14 @@ export const handlePlayerMove = (
                
                // Spawner Loot Logic
                if (entity.subType === 'MOB_SPAWNER') {
-                   // Always drop some iron/scraps
                    newInventory.push({...ITEMS['iron_ore'], id: uid()});
                    combatLogs.push({ id: uid(), message: `Looted: Iron Ore`, type: 'LOOT', timestamp: Date.now() });
 
-                   // 10% Chance for Spawner Item
                    if (Math.random() < 0.10) {
                        newInventory.push({ ...ITEMS['mob_spawner_item'], id: uid() });
                        combatLogs.push({ id: uid(), message: `RARE DROP: Cage of Souls!`, type: 'SECRET', timestamp: Date.now() });
                    }
 
-                   // 5% Chance for Dark Gem
                    if (Math.random() < 0.05) {
                        newInventory.push({ ...ITEMS['dark_gem'], id: uid() });
                        combatLogs.push({ id: uid(), message: `RARE DROP: Dark Gem!`, type: 'SECRET', timestamp: Date.now() });
@@ -581,6 +580,7 @@ export const handlePlayerMove = (
        animations: newAnimations,
        exploration: newExp,
        counters: newCounters,
-       worldTier: newWorldTier // Pass updated tier
+       activeQuest: newActiveQuest,
+       worldTier: newWorldTier
    };
 };

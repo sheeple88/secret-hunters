@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
-import { Star, X, Trophy, Lock, Unlock, HelpCircle } from 'lucide-react';
+import { Star, X, Trophy, Lock, Sparkles, BrainCircuit } from 'lucide-react';
 import { GameState } from '../../types';
 import { PERKS } from '../../constants';
 import { ALL_SECRETS } from '../../data/secrets/index';
 import { ACHIEVEMENTS } from '../../data/achievements';
+import { SecretsList } from '../secrets/SecretsList';
+import { generateRumor } from '../../services/geminiService';
 
 interface JournalModalProps {
   gameState: GameState;
@@ -14,19 +16,34 @@ interface JournalModalProps {
 
 export const JournalModal: React.FC<JournalModalProps> = ({ gameState, onClose, onTogglePerk }) => {
   const [tab, setTab] = useState<'SECRETS' | 'ACHIEVEMENTS' | 'PERKS'>('SECRETS');
+  const [rumor, setRumor] = useState<string | null>(null);
+  const [isRumorLoading, setIsRumorLoading] = useState(false);
 
   const unlockedSecretCount = gameState.unlockedSecretIds.length;
   const unlockedAchievementCount = gameState.unlockedAchievementIds.length;
 
+  const handleAskRumor = async () => {
+      setIsRumorLoading(true);
+      setRumor(null);
+      
+      const lockedSecrets = ALL_SECRETS.filter(s => !gameState.unlockedSecretIds.includes(s.id));
+      const unlockedSecrets = ALL_SECRETS.filter(s => gameState.unlockedSecretIds.includes(s.id));
+      
+      const msg = await generateRumor(unlockedSecrets, lockedSecrets, gameState.stats);
+      
+      setRumor(msg);
+      setIsRumorLoading(false);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col p-4 md:p-10 animate-fade-in">
-        <div className="flex justify-between items-center mb-6 max-w-5xl mx-auto w-full border-b border-stone-800 pb-4">
+        <div className="flex justify-between items-center mb-6 max-w-5xl mx-auto w-full border-b border-stone-800 pb-4 shrink-0">
             <h2 className="text-3xl font-bold text-yellow-500 flex items-center gap-3"><Star className="fill-current"/> Hunter's Journal</h2>
             <button onClick={onClose} className="p-2 bg-stone-800 rounded-full hover:bg-stone-700 transition-colors"><X/></button>
         </div>
         
         {/* Navigation */}
-        <div className="flex justify-center mb-4 max-w-5xl mx-auto w-full gap-2">
+        <div className="flex justify-center mb-4 max-w-5xl mx-auto w-full gap-2 shrink-0">
             <button onClick={() => setTab('SECRETS')} className={`px-4 py-2 rounded-t-lg font-bold flex items-center gap-2 ${tab === 'SECRETS' ? 'bg-stone-800 text-yellow-400' : 'bg-stone-900 text-stone-500 hover:text-stone-300'}`}>
                 <Star size={16}/> Secrets ({unlockedSecretCount})
             </button>
@@ -38,60 +55,45 @@ export const JournalModal: React.FC<JournalModalProps> = ({ gameState, onClose, 
             </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full min-h-0 bg-stone-900/50 rounded-xl p-4 border border-stone-800">
+        <div className="flex-1 overflow-hidden max-w-5xl mx-auto w-full bg-stone-900/50 rounded-xl p-4 border border-stone-800 flex flex-col">
             
             {/* SECRETS TAB */}
             {tab === 'SECRETS' && (
-                <div className="grid grid-cols-1 gap-3">
-                    {ALL_SECRETS.map(secret => {
-                        const unlocked = gameState.unlockedSecretIds.includes(secret.id);
-                        const perk = secret.perkId ? PERKS[secret.perkId] : null;
-                        
-                        return (
-                            <div key={secret.id} className={`relative p-4 rounded-lg border-2 transition-all duration-300 group ${unlocked ? 'bg-stone-800 border-yellow-600/50 shadow-lg shadow-yellow-900/10' : 'bg-stone-900 border-stone-800 opacity-80'}`}>
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-3">
-                                        <div className={`mt-1 p-2 rounded-full ${unlocked ? 'bg-yellow-900/30 text-yellow-400' : 'bg-stone-950 text-stone-600'}`}>
-                                            {unlocked ? <Unlock size={18} /> : <Lock size={18} />}
-                                        </div>
-                                        <div>
-                                            <h4 className={`font-bold text-lg leading-none mb-1 ${unlocked ? 'text-yellow-100' : 'text-stone-500'}`}>
-                                                {unlocked ? secret.title : '???'}
-                                            </h4>
-                                            <p className="text-sm text-stone-400 italic">
-                                                {unlocked ? secret.description : secret.hint}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="text-xs font-mono text-stone-600 uppercase tracking-widest">{secret.type}</div>
-                                </div>
-
-                                {unlocked && perk && (
-                                    <div className="mt-3 pt-3 border-t border-stone-700/50 flex items-center gap-2">
-                                        <span className="text-xs text-stone-500 uppercase font-bold tracking-wider">Reward:</span>
-                                        <div className="flex items-center gap-1 bg-stone-900 px-2 py-0.5 rounded text-xs text-blue-300 border border-stone-700">
-                                            <span>{perk.icon}</span>
-                                            <span>{perk.name}</span>
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                {!unlocked && (
-                                    <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center backdrop-blur-[1px] rounded-lg transition-all">
-                                        <div className="bg-stone-900 px-3 py-1 rounded border border-stone-700 flex items-center gap-2 text-xs text-stone-300">
-                                            <HelpCircle size={12}/> Hint: {secret.hint}
-                                        </div>
-                                    </div>
+                <div className="flex flex-col h-full gap-4">
+                    {/* AI Rumor Section */}
+                    <div className="bg-purple-900/20 border border-purple-500/30 p-4 rounded-lg shrink-0 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex-1">
+                            <h3 className="text-purple-300 font-bold flex items-center gap-2 text-sm uppercase tracking-wider mb-1">
+                                <Sparkles size={14}/> Whispers of the Void
+                            </h3>
+                            <div className="text-stone-300 italic text-sm min-h-[1.5em]">
+                                {isRumorLoading ? (
+                                    <span className="animate-pulse">Listening to the spirits...</span>
+                                ) : rumor ? (
+                                    `"${rumor}"`
+                                ) : (
+                                    "The spirits know what you seek. Ask them for guidance."
                                 )}
                             </div>
-                        );
-                    })}
+                        </div>
+                        <button 
+                            onClick={handleAskRumor} 
+                            disabled={isRumorLoading}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-stone-700 text-white rounded font-bold text-xs flex items-center gap-2 shadow-lg transition-all active:translate-y-1"
+                        >
+                            <BrainCircuit size={16}/> Consult the Spirits
+                        </button>
+                    </div>
+
+                    <div className="flex-1 min-h-0">
+                        <SecretsList secrets={ALL_SECRETS} unlockedSecretIds={gameState.unlockedSecretIds} />
+                    </div>
                 </div>
             )}
 
             {/* ACHIEVEMENTS TAB */}
             {tab === 'ACHIEVEMENTS' && (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-3 overflow-y-auto pr-2">
                     {ACHIEVEMENTS.map(ach => {
                         const unlocked = gameState.unlockedAchievementIds.includes(ach.id);
                         const progress = ach.progress ? ach.progress(gameState) : (unlocked ? 1 : 0);
@@ -127,7 +129,7 @@ export const JournalModal: React.FC<JournalModalProps> = ({ gameState, onClose, 
 
             {/* PERKS TAB */}
             {tab === 'PERKS' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 overflow-y-auto pr-2">
                     {gameState.unlockedPerks.map(pid => {
                         const p = PERKS[pid];
                         if (!p) return null;

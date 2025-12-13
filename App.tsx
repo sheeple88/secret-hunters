@@ -4,6 +4,7 @@ import { GameState, SkillName, Item, Stats, AnimationType, LogEntry, Recipe, Til
 import { MAPS, INITIAL_STATS, INITIAL_SKILLS, ITEMS, WEAPON_TEMPLATES, PERKS, DEFAULT_RECIPES, uid, calculateXpForLevel, calculateSkillLevel, SCALE_FACTOR } from './constants';
 import { ALL_SECRETS } from './data/secrets/index';
 import { ACHIEVEMENTS } from './data/achievements';
+import { QUESTS } from './data/quests';
 import { playSound, setMasterVolume } from './services/audioService';
 import { GameRenderer } from './components/renderer/GameRenderer';
 import { GameHUD } from './components/hud/GameHUD';
@@ -11,6 +12,7 @@ import { PuzzleConfig } from './components/modals/PuzzleModal';
 import { handlePlayerMove } from './systems/movement';
 import { generateBossRewards } from './services/itemService';
 import { generateHavensRest } from './systems/maps/havensRest';
+import { checkQuestUpdate } from './systems/questUtils';
 
 // --- Helper Functions ---
 const getTimestamp = () => Date.now();
@@ -128,6 +130,7 @@ export default function App() {
     // NEW TRACKING
     unlockedSecretIds: [],
     unlockedAchievementIds: [],
+    completedQuestIds: [],
     
     unlockedPerks: [],
     equippedPerks: [],
@@ -345,6 +348,7 @@ export default function App() {
                       delete gs.secrets; // Remove heavy object from state
                   }
                   if (!gs.unlockedAchievementIds) gs.unlockedAchievementIds = [];
+                  if (!gs.completedQuestIds) gs.completedQuestIds = [];
 
                   // Migrations...
                   let exp = gs.exploration || {};
@@ -513,14 +517,62 @@ export default function App() {
           const entity = map.entities.find(e => e.pos.x === tx && e.pos.y === ty);
           const tile = map.tiles[ty][tx];
           let newLogs = [...prev.logs], newAnimations = { ...prev.animations }, newInventory = [...prev.inventory], newCounters = { ...prev.counters };
-          
+          let newActiveQuest = prev.activeQuest;
+          let newStats = { ...prev.stats };
+          let completedQuestIds = [...prev.completedQuestIds];
+
           if (entity) {
               if (entity.type === 'NPC') {
                   playSound('UI_CLICK');
                   entity.facing = prev.playerFacing === 'UP' ? 'DOWN' : prev.playerFacing === 'DOWN' ? 'UP' : prev.playerFacing === 'LEFT' ? 'RIGHT' : 'LEFT';
                   
+                  // QUEST LOGIC
+                  if (entity.questId) {
+                      const questDef = QUESTS[entity.questId];
+                      
+                      // 1. Check if we have this quest active
+                      if (prev.activeQuest && prev.activeQuest.id === entity.questId) {
+                          // Complete?
+                          if (prev.activeQuest.currentCount >= prev.activeQuest.targetCount) {
+                              // COMPLETE
+                              playSound('LEVEL_UP');
+                              newStats.xp += prev.activeQuest.reward.xp;
+                              if (prev.activeQuest.reward.gold) newStats.gold += prev.activeQuest.reward.gold;
+                              if (prev.activeQuest.reward.itemId) {
+                                  const rewardItem = ITEMS[prev.activeQuest.reward.itemId];
+                                  if (rewardItem) {
+                                      const count = prev.activeQuest.reward.itemCount || 1;
+                                      for (let i=0; i<count; i++) newInventory = addToInventory(prepareItemForInventory(rewardItem), { ...prev, inventory: newInventory });
+                                  }
+                              }
+                              
+                              completedQuestIds.push(prev.activeQuest.id);
+                              newLogs.push({ id: uid(), message: `Quest Completed: ${prev.activeQuest.title}`, type: 'QUEST', timestamp: getTimestamp() });
+                              setActiveDialogue({ title: entity.name, messages: questDef.dialogueEnd || ["Thanks!"] });
+                              newActiveQuest = null;
+                          } else {
+                              // In progress
+                              setActiveDialogue({ title: entity.name, messages: [`How goes the hunt? (${prev.activeQuest.currentCount}/${prev.activeQuest.targetCount})`] });
+                          }
+                      } 
+                      // 2. Check if already completed
+                      else if (completedQuestIds.includes(entity.questId)) {
+                          setActiveDialogue({ title: entity.name, messages: ["Thanks again for your help."] });
+                      }
+                      // 3. Offer Quest
+                      else if (!prev.activeQuest) {
+                          // Accept
+                          newActiveQuest = { ...questDef, currentCount: 0, completed: false };
+                          setActiveDialogue({ title: entity.name, messages: questDef.dialogueStart || ["Need help."] });
+                          newLogs.push({ id: uid(), message: `Quest Accepted: ${questDef.title}`, type: 'QUEST', timestamp: getTimestamp() });
+                          playSound('SECRET');
+                      } else {
+                          // Has another quest
+                          setActiveDialogue({ title: entity.name, messages: ["Finish your current task first."] });
+                      }
+                  }
                   // Merchant Interaction
-                  if (entity.name.includes('Merchant')) {
+                  else if (entity.name.includes('Merchant')) {
                       handleOpenModal('MERCHANT');
                   } else {
                       setActiveDialogue({ title: entity.name, messages: entity.dialogue || ['...'] });
@@ -636,7 +688,7 @@ export default function App() {
                   setTimeout(() => setGameState(p => ({ ...p, animations: { ...p.animations, player: 'FISH_CATCH' }, inventory: addToInventory(prepareItemForInventory(ITEMS['raw_fish']), p), logs: [...p.logs, {id:uid(), message: 'Caught a small fish.', type: 'LOOT', timestamp: getTimestamp()}], counters: { ...p.counters, fish_caught: (p.counters.fish_caught || 0) + 1 } })), 1000);
               }
           }
-          return { ...prev, logs: newLogs, inventory: newInventory, animations: newAnimations, counters: newCounters };
+          return { ...prev, logs: newLogs, inventory: newInventory, animations: newAnimations, counters: newCounters, activeQuest: newActiveQuest, stats: newStats, completedQuestIds };
       });
   }, [activeDialogue, activePuzzle, activeModal]);
 
@@ -693,7 +745,18 @@ export default function App() {
           const newLevel = calculateSkillLevel(newXp);
           const newSkills = { ...prev.skills, [recipe.skill]: { ...skill, xp: newXp, level: newLevel } };
 
-          return { ...prev, inventory: addToInventory(prepareItemForInventory(resultItem), { ...prev, inventory: inv }), skills: newSkills, stats: { ...prev.stats, ...statChanges }, counters: newCounters };
+          let newLogs = [...prev.logs];
+          let newActiveQuest = prev.activeQuest;
+          
+          // QUEST UPDATE: Crafting/Collecting
+          // If the quest requires collecting the crafted item
+          const qUpd = checkQuestUpdate(newActiveQuest, 'COLLECT', resultItem.id, 1);
+          if (qUpd) {
+              newActiveQuest = qUpd.newQuest;
+              if (qUpd.log) newLogs.push(qUpd.log);
+          }
+
+          return { ...prev, inventory: addToInventory(prepareItemForInventory(resultItem), { ...prev, inventory: inv }), skills: newSkills, stats: { ...prev.stats, ...statChanges }, counters: newCounters, logs: newLogs, activeQuest: newActiveQuest };
       });
   };
   const lightingOpacity = (() => {

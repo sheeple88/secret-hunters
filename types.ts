@@ -116,6 +116,8 @@ export interface Quest {
   reward: { xp: number; gold?: number; itemId?: string; itemCount?: number };
   completed: boolean;
   giverId: string;
+  dialogueStart: string[];
+  dialogueEnd: string[];
 }
 
 export type AiType = 'MELEE' | 'RANGED' | 'FLEE' | 'STATIC';
@@ -185,6 +187,7 @@ export interface GameState {
   // Refactored Progress Tracking
   unlockedSecretIds: string[]; // List of IDs
   unlockedAchievementIds: string[]; // List of IDs
+  completedQuestIds: string[]; // List of IDs
   
   unlockedPerks: string[];
   equippedPerks: string[];
