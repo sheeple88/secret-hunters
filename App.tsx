@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, SkillName, Item, Stats, AnimationType, LogEntry, Recipe, TileType, Secret, Entity, Position, GameMap } from './types';
-import { MAPS, INITIAL_STATS, INITIAL_SKILLS, ITEMS, WEAPON_TEMPLATES, SECRETS_DATA, PERKS, uid, calculateXpForLevel, calculateSkillLevel } from './constants';
+import { MAPS, INITIAL_STATS, INITIAL_SKILLS, ITEMS, WEAPON_TEMPLATES, SECRETS_DATA, PERKS, DEFAULT_RECIPES, uid, calculateXpForLevel, calculateSkillLevel } from './constants';
 import { playSound } from './services/audioService';
 import { GameRenderer } from './components/renderer/GameRenderer';
 import { GameHUD } from './components/hud/GameHUD';
@@ -35,7 +35,7 @@ const getPlayerTotalStats = (base: Stats, equipment: Record<string, Item | null>
 };
 
 const addToInventory = (item: Item, state: GameState): Item[] => {
-  if (['MATERIAL', 'CONSUMABLE', 'JUNK', 'KEY', 'COLLECTIBLE'].includes(item.type)) {
+  if (['MATERIAL', 'CONSUMABLE', 'JUNK', 'KEY', 'COLLECTIBLE', 'GADGET', 'BLUEPRINT'].includes(item.type)) {
     const existing = state.inventory.find(i => i.id === item.id);
     if (existing) {
       return state.inventory.map(i => i.id === item.id ? { ...i, count: i.count + (item.count || 1) } : i);
@@ -74,6 +74,7 @@ const applySkillXp = (currentStats: Stats, currentSkills: Record<SkillName, any>
     if (levelsGained > 0) {
         logs.push(`SKILL UP! ${skillName} ${skill.level} -> ${newLevel}`);
         playSound('LEVEL_UP');
+        // Bonus stats from skills still apply automatically
         if (skillName === 'Strength') statChanges.str = (currentStats.str || 0) + (levelsGained * 2);
         if (skillName === 'Dexterity') statChanges.dex = (currentStats.dex || 0) + (levelsGained * 2);
         if (skillName === 'Agility') { statChanges.dex = (currentStats.dex || 0) + levelsGained; statChanges.regeneration = (currentStats.regeneration || 0) + Math.ceil(levelsGained * 0.5); }
@@ -108,6 +109,7 @@ export default function App() {
     equipment: { HEAD: null, BODY: null, LEGS: null, WEAPON: null, OFFHAND: null, ACCESSORY: null },
     skills: INITIAL_SKILLS,
     inventory: [],
+    knownRecipes: DEFAULT_RECIPES,
     secrets: SECRETS_DATA.map(s => ({ ...s, unlocked: false })),
     unlockedPerks: [],
     equippedPerks: [],
@@ -124,7 +126,9 @@ export default function App() {
     knownWaypoints: [],
     knownLocations: [],
     animations: {},
-    time: 800
+    time: 800,
+    autoDistributeStats: false,
+    statAllocation: { str: 25, dex: 25, int: 25, hp: 20, regeneration: 5 }
   });
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -136,6 +140,85 @@ export default function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+
+  // --- LEVEL UP LOGIC ---
+  const checkLevelUp = useCallback((state: GameState): GameState => {
+      let newState = { ...state };
+      const xpReq = calculateXpForLevel(newState.stats.level + 1);
+      
+      if (newState.stats.xp >= xpReq) {
+          // Level Up!
+          playSound('LEVEL_UP');
+          const pointsGained = 5; // 5 stat points per level
+          newState.stats.level += 1;
+          newState.stats.maxHp += 10; // Base HP growth
+          newState.stats.hp = newState.stats.maxHp;
+          newState.logs = [...newState.logs, { id: uid(), message: `LEVEL UP! You are now level ${newState.stats.level}.`, type: 'INFO', timestamp: getTimestamp() }];
+
+          // Auto Distribute Logic
+          if (newState.autoDistributeStats) {
+              const { str, dex, int, hp, regeneration } = newState.statAllocation;
+              const totalWeight = str + dex + int + hp + regeneration;
+              
+              if (totalWeight > 0) {
+                  let usedPoints = 0;
+                  
+                  // Calculate points for each stat based on %
+                  const addStr = Math.floor(pointsGained * (str / totalWeight));
+                  const addDex = Math.floor(pointsGained * (dex / totalWeight));
+                  const addInt = Math.floor(pointsGained * (int / totalWeight));
+                  const addHp = Math.floor(pointsGained * (hp / totalWeight));
+                  const addRegen = Math.floor(pointsGained * (regeneration / totalWeight));
+
+                  newState.stats.str += addStr;
+                  newState.stats.dex += addDex;
+                  newState.stats.int += addInt;
+                  newState.stats.maxHp += (addHp * 5); // 1 pt = 5 HP
+                  newState.stats.hp += (addHp * 5);
+                  newState.stats.regeneration += addRegen;
+
+                  usedPoints = addStr + addDex + addInt + addHp + addRegen;
+                  newState.stats.unspentStatPoints = (newState.stats.unspentStatPoints || 0) + (pointsGained - usedPoints);
+                  
+                  newState.logs.push({ id: uid(), message: `Auto-distributed ${usedPoints} points.`, type: 'INFO', timestamp: getTimestamp() });
+              } else {
+                  newState.stats.unspentStatPoints = (newState.stats.unspentStatPoints || 0) + pointsGained;
+              }
+          } else {
+              newState.stats.unspentStatPoints = (newState.stats.unspentStatPoints || 0) + pointsGained;
+              newState.logs.push({ id: uid(), message: `Gained ${pointsGained} Stat Points!`, type: 'INFO', timestamp: getTimestamp() });
+          }
+      }
+      return newState;
+  }, []);
+
+  // --- STAT ALLOCATION HANDLERS ---
+  const handleStatIncrease = (stat: keyof Stats) => {
+      setGameState(prev => {
+          if (prev.stats.unspentStatPoints <= 0) return prev;
+          const newStats = { ...prev.stats };
+          
+          if (stat === 'maxHp') { // Map generic HP button to maxHp
+              newStats.maxHp += 5;
+              newStats.hp += 5;
+          } else {
+              // @ts-ignore
+              newStats[stat] += 1;
+          }
+          
+          newStats.unspentStatPoints -= 1;
+          playSound('UI_CLICK');
+          return { ...prev, stats: newStats };
+      });
+  };
+
+  const handleAutoDistributionChange = (enabled: boolean, allocation: any) => {
+      setGameState(prev => ({
+          ...prev,
+          autoDistributeStats: enabled,
+          statAllocation: allocation
+      }));
+  };
 
   // --- SCALE & MOBILE LOGIC ---
   useEffect(() => {
@@ -196,6 +279,18 @@ export default function App() {
                   // Ensure default Logging skill exists if missing
                   if (!parsed.skills['Logging']) {
                       parsed.skills['Logging'] = { name: 'Logging', level: 1, xp: 0 };
+                  }
+
+                  // Migration for knownRecipes
+                  if (!parsed.knownRecipes) {
+                      parsed.knownRecipes = DEFAULT_RECIPES;
+                  }
+                  
+                  // Migration for Stat Allocation
+                  if (parsed.autoDistributeStats === undefined) {
+                      parsed.autoDistributeStats = false;
+                      parsed.statAllocation = { str: 25, dex: 25, int: 25, hp: 20, regeneration: 5 };
+                      parsed.stats.unspentStatPoints = 0;
                   }
 
                   setGameState({ 
@@ -281,8 +376,14 @@ export default function App() {
           if (entity) {
               if (entity.type === 'NPC') {
                   playSound('UI_CLICK');
-                  setActiveDialogue({ title: entity.name, messages: entity.dialogue || ['...'] });
                   entity.facing = prev.playerFacing === 'UP' ? 'DOWN' : prev.playerFacing === 'DOWN' ? 'UP' : prev.playerFacing === 'LEFT' ? 'RIGHT' : 'LEFT';
+                  
+                  // Merchant Interaction
+                  if (entity.name.includes('Merchant')) {
+                      setActiveModal('MERCHANT');
+                  } else {
+                      setActiveDialogue({ title: entity.name, messages: entity.dialogue || ['...'] });
+                  }
               } else if (entity.type === 'OBJECT') {
                   if (entity.subType === 'ANVIL') setActiveModal('ANVIL');
                   else if (entity.subType === 'WORKBENCH') setActiveModal('WORKBENCH');
@@ -324,7 +425,10 @@ export default function App() {
       setGameState(prev => {
           if (activePuzzle || activeDialogue) return prev;
           
-          const nextState = handlePlayerMove(prev, dx, dy, setActiveModal);
+          let nextState = handlePlayerMove(prev, dx, dy, setActiveModal);
+          
+          // Check for Level Up after movement/action
+          nextState = checkLevelUp(nextState);
           
           // Temporary display logic for animations managed by system
           if (Object.keys(nextState.animations).length > 0) {
@@ -335,7 +439,7 @@ export default function App() {
           
           return nextState;
       });
-  }, [activePuzzle, activeDialogue]);
+  }, [activePuzzle, activeDialogue, checkLevelUp]);
 
   useEffect(() => {
       const h = (e: KeyboardEvent) => {
@@ -377,6 +481,123 @@ export default function App() {
       setGameState(prev => {
           const map = MAPS[prev.currentMapId]; const newEntities = map.entities.filter(e => e.id !== activePuzzle?.id); MAPS[prev.currentMapId].entities = newEntities; const newCounters = { ...prev.counters, puzzles_solved: (prev.counters.puzzles_solved || 0) + 1 };
           return { ...prev, logs: [...prev.logs, { id: uid(), message: 'Puzzle Solved! Passage Opened.', type: 'SECRET', timestamp: getTimestamp() }], counters: newCounters };
+      });
+  };
+
+  const handleConsume = (item: Item) => {
+      // Placeable Items Logic
+      if (item.id === 'mob_spawner_item') {
+          setGameState(prev => {
+              const map = MAPS[prev.currentMapId];
+              
+              // Calculate target position based on facing
+              let tx = prev.playerPos.x;
+              let ty = prev.playerPos.y;
+              if (prev.playerFacing === 'UP') ty -= 1;
+              if (prev.playerFacing === 'DOWN') ty += 1;
+              if (prev.playerFacing === 'LEFT') tx -= 1;
+              if (prev.playerFacing === 'RIGHT') tx += 1;
+
+              // Check bounds
+              if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) {
+                  playSound('BUMP');
+                  return prev; 
+              }
+
+              // Check if space is occupied by entity or blocked tile
+              const isOccupied = map.entities.some(e => e.pos.x === tx && e.pos.y === ty);
+              const tile = map.tiles[ty][tx];
+              const blockedTiles = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'WATER', 'LAVA', 'VOID'];
+              
+              if (isOccupied || blockedTiles.includes(tile)) {
+                  return {
+                      ...prev,
+                      logs: [...prev.logs, { id: uid(), message: "Cannot place that here.", type: 'INFO', timestamp: getTimestamp() }]
+                  };
+              }
+
+              // Place Spawner
+              playSound('CRAFT');
+              const newEntity: Entity = {
+                  id: `spawner_placed_${uid()}`,
+                  name: `Placed Cage`,
+                  type: 'OBJECT',
+                  subType: 'MOB_SPAWNER',
+                  symbol: '#',
+                  color: 'darkred',
+                  pos: {x: tx, y: ty},
+                  hp: 100,
+                  maxHp: 100,
+                  level: 1,
+                  spawnType: 'Skeleton', // Default spawn for placed cages
+                  lastSpawnTime: 0,
+                  lastSpawnStep: 0
+              };
+              
+              map.entities.push(newEntity);
+
+              return {
+                  ...prev,
+                  inventory: removeFromInventory(item.id, 1, prev),
+                  logs: [...prev.logs, { id: uid(), message: "Placed Mob Spawner.", type: 'INFO', timestamp: getTimestamp() }]
+              };
+          });
+          return;
+      }
+
+      // Blueprint Logic
+      if (item.type === 'BLUEPRINT' && item.recipeId) {
+          setGameState(prev => {
+              if (prev.knownRecipes.includes(item.recipeId!)) {
+                  return { ...prev, logs: [...prev.logs, { id: uid(), message: "You already know this recipe.", type: 'INFO', timestamp: getTimestamp() }]};
+              }
+              playSound('LEVEL_UP');
+              return {
+                  ...prev,
+                  knownRecipes: [...prev.knownRecipes, item.recipeId!],
+                  inventory: removeFromInventory(item.id, 1, prev),
+                  logs: [...prev.logs, { id: uid(), message: `Learned Recipe: ${item.name.replace('Blueprint: ', '')}`, type: 'SECRET', timestamp: getTimestamp() }]
+              };
+          });
+          return;
+      }
+
+      // Default Consumable Logic (Potions/Food)
+      playSound('GATHER'); 
+      setGameState(p => ({ 
+          ...p, 
+          stats: { ...p.stats, hp: Math.min(p.stats.maxHp, p.stats.hp + (item.healAmount||0)) }, 
+          inventory: removeFromInventory(item.id, 1, p) 
+      })); 
+  };
+
+  const handleBuy = (itemId: string, price: number) => {
+      setGameState(prev => {
+          if (prev.stats.gold < price) return prev;
+          playSound('UI_CLICK'); // Or a generic 'COINS' sound if available
+          const item = ITEMS[itemId];
+          
+          // Special case for blueprints: Add to inventory, not directly unlock (user must consume)
+          // But wait, if they buy it, they get the item. `handleConsume` handles unlocking.
+          
+          return {
+              ...prev,
+              stats: { ...prev.stats, gold: prev.stats.gold - price },
+              inventory: addToInventory(prepareItemForInventory(item), prev),
+              logs: [...prev.logs, { id: uid(), message: `Bought ${item.name}`, type: 'TRADE', timestamp: getTimestamp() }]
+          };
+      });
+  };
+
+  const handleSell = (item: Item, price: number) => {
+      setGameState(prev => {
+          playSound('UI_CLICK');
+          return {
+              ...prev,
+              stats: { ...prev.stats, gold: prev.stats.gold + price },
+              inventory: removeFromInventory(item.id, 1, prev),
+              logs: [...prev.logs, { id: uid(), message: `Sold ${item.name} for ${price}g`, type: 'TRADE', timestamp: getTimestamp() }]
+          };
       });
   };
 
@@ -452,12 +673,16 @@ export default function App() {
             onCraft={craft}
             onRespawn={() => { setGameState(p => ({ ...p, playerPos: {x:20,y:15}, currentMapId: 'map_10_10', stats: { ...p.stats, hp: p.stats.maxHp } })); setActiveModal(null); }}
             onResetSave={() => { localStorage.removeItem('sh_save_v1'); window.location.reload(); }}
-            onConsume={(item) => { playSound('GATHER'); setGameState(p => ({ ...p, stats: { ...p.stats, hp: Math.min(p.stats.maxHp, p.stats.hp + (item.healAmount||0)) }, inventory: removeFromInventory(item.id, 1, p) })); }}
+            onConsume={handleConsume}
             onTogglePerk={(id) => { setGameState(p => { const eq = p.equippedPerks.includes(id) ? p.equippedPerks.filter(x => x !== id) : [...p.equippedPerks, id].slice(0,3); return { ...p, equippedPerks: eq }; }); }}
             onPuzzleSolve={handlePuzzleSolve}
             onPuzzleClose={() => setActivePuzzle(null)}
             onDialogueClose={() => setActiveDialogue(null)}
             formatTime={(t) => `${Math.floor(t/100).toString().padStart(2,'0')}:${Math.floor((t%100)*0.6).toString().padStart(2,'0')}`}
+            onBuy={handleBuy}
+            onSell={handleSell}
+            onStatIncrease={handleStatIncrease}
+            onAutoConfigChange={handleAutoDistributionChange}
         />
     </div>
   );

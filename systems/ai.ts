@@ -36,7 +36,8 @@ export const hasLineOfSight = (p1: Position, p2: Position, map: GameMap): boolea
 export const processSpawners = (
     entities: Entity[],
     currentMap: GameMap,
-    playerPos: Position
+    playerPos: Position,
+    currentStep: number // Added step tracker
 ): Entity[] => {
     const now = Date.now();
     let newEntities = [...entities];
@@ -44,9 +45,14 @@ export const processSpawners = (
     entities.forEach((entity, index) => {
         if (entity.subType !== 'MOB_SPAWNER') return;
 
-        // Check cooldown (Spawn every 15s to 30s roughly)
-        // Using a simple timestamp check
-        if (entity.lastSpawnTime && now - entity.lastSpawnTime < 15000) return;
+        // Check cooldown (Spawn every 3s OR 5 steps)
+        const timeDiff = now - (entity.lastSpawnTime || 0);
+        const stepDiff = currentStep - (entity.lastSpawnStep || 0);
+        
+        const isTimeReady = timeDiff >= 3000;
+        const isStepReady = stepDiff >= 5;
+
+        if (!isTimeReady && !isStepReady) return;
 
         // Find empty adjacent spot
         const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
@@ -71,8 +77,8 @@ export const processSpawners = (
 
         if (spawnPos) {
             const type = entity.spawnType || 'Slime';
-            // Update lastSpawnTime in the original array reference through newEntities logic
-            newEntities[index] = { ...entity, lastSpawnTime: now };
+            // Update lastSpawnTime and lastSpawnStep in the original array reference through newEntities logic
+            newEntities[index] = { ...entity, lastSpawnTime: now, lastSpawnStep: currentStep };
             
             const level = entity.level || 1;
             const hp = Math.floor(20 + level * 8);

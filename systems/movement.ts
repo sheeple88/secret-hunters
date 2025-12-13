@@ -301,10 +301,23 @@ export const handlePlayerMove = (
                    }
                }
                
-               // Spawner always drops scraps
+               // Spawner Loot Logic
                if (entity.subType === 'MOB_SPAWNER') {
+                   // Always drop some iron/scraps
                    newInventory.push({...ITEMS['iron_ore'], id: uid()});
                    combatLogs.push({ id: uid(), message: `Looted: Iron Ore`, type: 'LOOT', timestamp: Date.now() });
+
+                   // 10% Chance for Spawner Item
+                   if (Math.random() < 0.10) {
+                       newInventory.push({ ...ITEMS['mob_spawner_item'], id: uid() });
+                       combatLogs.push({ id: uid(), message: `RARE DROP: Cage of Souls!`, type: 'SECRET', timestamp: Date.now() });
+                   }
+
+                   // 5% Chance for Dark Gem
+                   if (Math.random() < 0.05) {
+                       newInventory.push({ ...ITEMS['dark_gem'], id: uid() });
+                       combatLogs.push({ id: uid(), message: `RARE DROP: Dark Gem!`, type: 'SECRET', timestamp: Date.now() });
+                   }
                }
 
                if (!newBestiary.includes(entity.name)) newBestiary.push(entity.name);
@@ -342,8 +355,8 @@ export const handlePlayerMove = (
    // --- 4. Enemy Turns ---
    // Also handle Spawner Logic
    if (playerDidAction) {
-       // Process Spawners first
-       nextMapEntities = processSpawners(nextMapEntities, targetMap, nextPos);
+       // Process Spawners first (pass current steps)
+       nextMapEntities = processSpawners(nextMapEntities, targetMap, nextPos, newCounters.steps_taken || 0);
 
        const aiMapState = { ...targetMap, entities: nextMapEntities };
        const { entities: updatedEntities, damageToPlayer, logs: enemyLogs, anims: enemyAnims, numbers: enemyNumbers } 

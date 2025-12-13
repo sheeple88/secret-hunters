@@ -2,7 +2,6 @@
 import React from 'react';
 import { GameState, Stats, Item, Recipe } from '../../types';
 import { Save } from 'lucide-react';
-import { formatNumber } from '../../constants';
 
 import { InventoryModal } from '../modals/InventoryModal';
 import { SkillsModal } from '../modals/SkillsModal';
@@ -12,6 +11,7 @@ import { CraftingModal } from '../modals/CraftingModal';
 import { PuzzleModal, PuzzleConfig } from '../modals/PuzzleModal';
 import { DialogueModal } from '../modals/DialogueModal';
 import { WorldMapModal } from '../modals/WorldMapModal';
+import { MerchantModal } from '../modals/MerchantModal';
 
 import { GameControls } from './GameControls';
 import { StatusBar } from './StatusBar';
@@ -40,6 +40,10 @@ interface GameHUDProps {
   onPuzzleClose: () => void;
   onDialogueClose: () => void;
   formatTime: (t: number) => string;
+  onBuy: (itemId: string, price: number) => void;
+  onSell: (item: Item, price: number) => void;
+  onStatIncrease: (stat: keyof Stats) => void;
+  onAutoConfigChange: (enabled: boolean, allocation: any) => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -60,7 +64,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onPuzzleSolve,
   onPuzzleClose,
   onDialogueClose,
-  formatTime
+  formatTime,
+  onBuy,
+  onSell,
+  onStatIncrease,
+  onAutoConfigChange
 }) => {
 
   return (
@@ -94,6 +102,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onClose={() => setActiveModal(null)} 
             onEquip={onEquip} 
             onConsume={onConsume} 
+            onStatIncrease={onStatIncrease}
+            onAutoConfigChange={onAutoConfigChange}
         />
       )}
       
@@ -123,6 +133,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <WorldMapModal 
             gameState={gameState} 
             onClose={() => setActiveModal(null)} 
+        />
+      )}
+
+      {activeModal === 'MERCHANT' && (
+        <MerchantModal
+            gameState={gameState}
+            onClose={() => setActiveModal(null)}
+            onBuy={onBuy}
+            onSell={onSell}
         />
       )}
 

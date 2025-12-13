@@ -16,6 +16,7 @@ export type Stats = {
   xp: number;
   level: number;
   gold: number;
+  unspentStatPoints: number; // New field for manual allocation
 };
 
 export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
@@ -40,7 +41,7 @@ export interface Recipe {
     station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE'; // Requirement
 }
 
-export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY' | 'COLLECTIBLE';
+export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY' | 'COLLECTIBLE' | 'GADGET' | 'BLUEPRINT';
 export type EquipmentSlot = 'HEAD' | 'BODY' | 'LEGS' | 'WEAPON' | 'OFFHAND' | 'ACCESSORY';
 export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC' | 'GODLY' | 'DIVINE' | 'COSMIC' | 'ETERNAL';
 export type WeaponType = 'SWORD' | 'AXE' | 'MACE' | 'DAGGER' | 'SPEAR' | 'BOW' | 'STAFF' | 'ROD';
@@ -71,6 +72,7 @@ export interface Item {
   rarity?: Rarity;
   levelReq?: number;
   value?: number;
+  recipeId?: string; // For Blueprints
 }
 
 export interface Perk {
@@ -134,6 +136,7 @@ export interface Entity {
   // Spawner Props
   isSpawned?: boolean; // If true, reduced XP/Loot
   lastSpawnTime?: number; // Timestamp
+  lastSpawnStep?: number; // Steps taken
   spawnType?: string; // Monster name base
 }
 
@@ -156,7 +159,7 @@ export interface GameMap {
 export interface LogEntry {
   id: string;
   message: string;
-  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST' | 'DEBUG';
+  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST' | 'DEBUG' | 'TRADE';
   timestamp: number;
 }
 
@@ -170,6 +173,7 @@ export interface GameState {
   equipment: Record<EquipmentSlot, Item | null>; // Equipped items
   skills: Record<SkillName, Skill>;
   inventory: Item[];
+  knownRecipes: string[]; // List of recipe IDs unlocked
   secrets: Secret[];
   // Perks System
   unlockedPerks: string[]; // List of Perk IDs
@@ -189,4 +193,14 @@ export interface GameState {
   knownLocations: string[]; // List of mapIds revealed by signs/lore
   animations: Record<string, AnimationType>; // Transient animations
   time: number; // 0 to 2400 (Day/Night cycle)
+  
+  // Stat Automation
+  autoDistributeStats: boolean;
+  statAllocation: {
+      str: number; // Percentage 0-100
+      dex: number;
+      int: number;
+      hp: number;
+      regeneration: number;
+  };
 }

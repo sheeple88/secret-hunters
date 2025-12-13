@@ -23,7 +23,7 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({ gameState, station
                 <button onClick={onClose}><X className="w-6 h-6 hover:text-red-400"/></button>
             </div>
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                {RECIPES.filter(r => r.station === station).map(recipe => {
+                {RECIPES.filter(r => r.station === station && gameState.knownRecipes.includes(r.id)).map(recipe => {
                     const skill = gameState.skills[recipe.skill];
                     const canCraftLevel = skill.level >= recipe.levelReq;
                     const canCraftMats = recipe.ingredients.every(ing => {
@@ -48,6 +48,9 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({ gameState, station
                         </div>
                     )
                 })}
+                {RECIPES.filter(r => r.station === station && gameState.knownRecipes.includes(r.id)).length === 0 && (
+                    <div className="text-stone-500 text-center italic py-4">No recipes known for this station.</div>
+                )}
             </div>
         </div>
     </div>

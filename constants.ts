@@ -20,7 +20,8 @@ export const formatNumber = (num: number): string => {
     return scaled.toFixed(1) + suffix;
 };
 
-export const calculateXpForLevel = (level: number) => 50 * Math.pow(level, 2.2);
+// Reduced scaling factor from 2.2 to 1.75 for easier leveling
+export const calculateXpForLevel = (level: number) => Math.floor(50 * Math.pow(level, 1.75));
 export const calculateSkillLevel = (xp: number) => Math.floor(Math.pow(xp / 10, 0.45)) + 1;
 
 export const INITIAL_STATS: Stats = {
@@ -32,7 +33,8 @@ export const INITIAL_STATS: Stats = {
   maxHp: 50,
   xp: 0,
   level: 1,
-  gold: 0
+  gold: 0,
+  unspentStatPoints: 0
 };
 
 export const INITIAL_SKILLS: Record<SkillName, Skill> = {
@@ -47,6 +49,13 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Alchemy: { name: 'Alchemy', level: 1, xp: 0 },
   Fishing: { name: 'Fishing', level: 1, xp: 0 },
 };
+
+export const DEFAULT_RECIPES = [
+    'potion_small', 
+    'wood_plank', 
+    'fishing_rod',
+    'iron_ingot'
+];
 
 export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string[] }> = {
     HEAD: { names: ['Helmet', 'Cap', 'Hood', 'Crown', 'Visor', 'Greathelm', 'Circlet', 'Diadem'], statBias: ['hp', 'regeneration'] },
@@ -107,6 +116,7 @@ export const ITEMS: Record<string, Item> = {
     'iron_ore': { id: 'iron_ore', name: 'Iron Ore', type: 'MATERIAL', description: 'Can be smelted.', count: 1, value: 5 },
     'gold_ore': { id: 'gold_ore', name: 'Gold Ore', type: 'MATERIAL', description: 'Sparkly.', count: 1, value: 20 },
     'diamond': { id: 'diamond', name: 'Diamond', type: 'MATERIAL', description: 'Very hard.', count: 1, value: 100 },
+    'dark_gem': { id: 'dark_gem', name: 'Dark Gem', type: 'MATERIAL', description: 'Pulsing with chaotic energy.', count: 1, value: 300, rarity: 'RARE' },
     'iron_ingot': { id: 'iron_ingot', name: 'Iron Ingot', type: 'MATERIAL', description: 'Used for smithing.', count: 1, value: 15 },
     'herb': { id: 'herb', name: 'Herb', type: 'MATERIAL', description: 'Medicinal plant.', count: 1, value: 2 },
     'potion_small': { id: 'potion_small', name: 'Small Potion', type: 'CONSUMABLE', description: 'Heals 20 HP.', count: 1, healAmount: 20, value: 10 },
@@ -115,6 +125,13 @@ export const ITEMS: Record<string, Item> = {
     'raw_fish': { id: 'raw_fish', name: 'Raw Fish', type: 'CONSUMABLE', description: 'Slimy but nutritious. Heals 10 HP.', count: 1, healAmount: 10, value: 5 },
     'iron_key': { id: 'iron_key', name: 'Iron Key', type: 'KEY', description: 'Opens basic locked doors and chests.', count: 1, value: 25 },
     
+    // Gadgets / Placables
+    'mob_spawner_item': { id: 'mob_spawner_item', name: 'Cage of Souls', type: 'GADGET', description: 'A captured spawner. Use to place.', count: 1, value: 500, rarity: 'EPIC' },
+
+    // Blueprints
+    'blueprint_potion_medium': { id: 'blueprint_potion_medium', name: 'Blueprint: Medium Potion', type: 'BLUEPRINT', description: 'Teaches how to brew medium potions.', count: 1, value: 100, recipeId: 'potion_medium', rarity: 'UNCOMMON' },
+    'blueprint_iron_sword': { id: 'blueprint_iron_sword', name: 'Blueprint: Iron Sword', type: 'BLUEPRINT', description: 'Teaches how to forge iron swords.', count: 1, value: 150, recipeId: 'sword_iron', rarity: 'UNCOMMON' },
+
     // Equipment
     'fishing_rod': { id: 'fishing_rod', name: 'Old Fishing Rod', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Use near water to catch fish.', count: 1, weaponStats: WEAPON_TEMPLATES['Rod'], value: 20 },
     'sword_training': { id: 'sword_training', name: 'Training Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A dull sword.', count: 1, weaponStats: WEAPON_TEMPLATES['Sword'], value: 5 },
@@ -135,6 +152,14 @@ export const RECIPES: Recipe[] = [
     { id: 'iron_ingot', name: 'Iron Ingot', resultItemId: 'iron_ingot', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 20, ingredients: [{itemId: 'iron_ore', count: 2}], station: 'ANVIL' },
     { id: 'iron_key', name: 'Iron Key', resultItemId: 'iron_key', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 25, ingredients: [{itemId: 'iron_ingot', count: 1}], station: 'ANVIL' },
     { id: 'sword_iron', name: 'Iron Sword', resultItemId: 'sword_iron', yield: 1, skill: 'Crafting', levelReq: 3, xpReward: 50, ingredients: [{itemId: 'iron_ingot', count: 2}, {itemId: 'wood', count: 1}], station: 'ANVIL' },
+];
+
+export const MERCHANT_STOCK: { itemId: string, price: number }[] = [
+    { itemId: 'potion_small', price: 25 }, // Markup from value 10
+    { itemId: 'wood', price: 5 },
+    { itemId: 'iron_ore', price: 15 },
+    { itemId: 'blueprint_potion_medium', price: 250 },
+    { itemId: 'blueprint_iron_sword', price: 300 },
 ];
 
 export const PERKS: Record<string, Perk> = {
