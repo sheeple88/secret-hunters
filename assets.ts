@@ -51,6 +51,11 @@ export const ASSETS = {
     <rect x="8" y="4" width="1" height="4" fill="#292524" opacity="0.4"/>
     <rect x="4" y="9" width="1" height="4" fill="#292524" opacity="0.4"/>
   `),
+  ROOF: createAsset(`
+    <rect width="16" height="16" fill="#7c2d12"/>
+    <path d="M0,4 L16,4 M0,8 L16,8 M0,12 L16,12" stroke="#431407" opacity="0.5"/>
+    <path d="M4,0 L4,4 M12,0 L12,4 M8,4 L8,8 M4,8 L4,12 M12,8 L12,12 M8,12 L8,16" stroke="#431407" opacity="0.5"/>
+  `),
   CRACKED_WALL: createAsset(`
     <rect width="16" height="16" fill="#57534e"/>
     <rect x="0" y="3" width="16" height="1" fill="#292524" opacity="0.4"/>
@@ -157,6 +162,30 @@ export const ASSETS = {
     <rect x="3" y="4" width="10" height="4" fill="#15803d"/>
     <rect x="5" y="3" width="1" height="1" fill="#4ade80" opacity="0.5"/>
   `),
+  OAK_TREE: createAsset(`
+    <rect x="6" y="10" width="4" height="6" fill="#78350f"/>
+    <circle cx="8" cy="6" r="5" fill="#15803d"/>
+    <circle cx="6" cy="5" r="3" fill="#16a34a"/>
+    <circle cx="10" cy="5" r="2" fill="#16a34a"/>
+  `),
+  BIRCH_TREE: createAsset(`
+    <rect x="7" y="6" width="2" height="10" fill="#e5e5e5"/>
+    <rect x="7" y="8" width="2" height="1" fill="#404040"/>
+    <rect x="7" y="12" width="2" height="1" fill="#404040"/>
+    <path d="M8,1 L4,6 L12,6 Z" fill="#bef264"/>
+    <path d="M8,4 L3,9 L13,9 Z" fill="#a3e635"/>
+  `),
+  PINE_TREE: createAsset(`
+    <rect x="7" y="12" width="2" height="4" fill="#3f2c20"/>
+    <path d="M2,13 L8,4 L14,13 Z" fill="#065f46"/>
+    <path d="M3,9 L8,2 L13,9 Z" fill="#047857"/>
+  `),
+  STUMP: createAsset(`
+    <rect x="6" y="10" width="4" height="4" fill="#78350f"/>
+    <rect x="6" y="10" width="4" height="1" fill="#92400e"/>
+    <rect x="7" y="10" width="2" height="1" fill="#b45309"/>
+  `),
+
   ROCK: createAsset(`
     <rect x="4" y="8" width="8" height="6" fill="#78716c" rx="1"/>
     <rect x="5" y="9" width="2" height="1" fill="#d6d3d1" opacity="0.5"/>

@@ -1,13 +1,13 @@
 
 import { GameMap, Secret, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType } from './types';
 import { ASSETS } from './assets';
+import { createWorld } from './systems/mapGenerator';
+import { uid } from './systems/mapUtils';
 
-export const uid = () => Math.random().toString(36).substr(2, 9);
-
+export { uid };
 export { ASSETS };
 
 // --- INFINITE NUMBER SCALING ---
-// Supports up to DuoDecillion (Dc) and beyond
 const SUFFIXES = ["", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid", "Sxd", "Spd", "Ocd", "Nod", "Vg", "Uvg", "Dvg"];
 
 export const formatNumber = (num: number): string => {
@@ -20,7 +20,7 @@ export const formatNumber = (num: number): string => {
     return scaled.toFixed(1) + suffix;
 };
 
-export const calculateXpForLevel = (level: number) => 50 * Math.pow(level, 2.2); // Steeper curve for infinite scaling
+export const calculateXpForLevel = (level: number) => 50 * Math.pow(level, 2.2);
 export const calculateSkillLevel = (xp: number) => Math.floor(Math.pow(xp / 10, 0.45)) + 1;
 
 export const INITIAL_STATS: Stats = {
@@ -39,7 +39,7 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Strength: { name: 'Strength', level: 1, xp: 0 },
   Dexterity: { name: 'Dexterity', level: 1, xp: 0 },
   Agility: { name: 'Agility', level: 1, xp: 0 },
-  Woodcutting: { name: 'Woodcutting', level: 1, xp: 0 },
+  Logging: { name: 'Logging', level: 1, xp: 0 },
   Mining: { name: 'Mining', level: 1, xp: 0 },
   Crafting: { name: 'Crafting', level: 1, xp: 0 },
   Fletching: { name: 'Fletching', level: 1, xp: 0 },
@@ -47,8 +47,6 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Alchemy: { name: 'Alchemy', level: 1, xp: 0 },
   Fishing: { name: 'Fishing', level: 1, xp: 0 },
 };
-
-export const MAGIC_TYPES: MagicType[] = ['FIRE', 'WATER', 'EARTH', 'AIR', 'LIGHTNING', 'ICE', 'NATURE', 'POISON', 'LIGHT', 'DARK', 'ARCANE', 'VOID', 'TIME', 'SPACE', 'GRAVITY', 'BLOOD', 'SOUL', 'CHAOS', 'ORDER', 'METAL'];
 
 export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string[] }> = {
     HEAD: { names: ['Helmet', 'Cap', 'Hood', 'Crown', 'Visor', 'Greathelm', 'Circlet', 'Diadem'], statBias: ['hp', 'regeneration'] },
@@ -59,7 +57,6 @@ export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string
     ACCESSORY: { names: ['Ring', 'Amulet', 'Talisman', 'Charm', 'Necklace', 'Band', 'Pendant', 'Brooch'], statBias: ['str', 'dex', 'int', 'regeneration'] },
 };
 
-// Expanded Tiers for Infinite Scaling (0-99)
 export const LOOT_TIERS = Array.from({ length: 100 }, (_, i) => ({
     name: i === 0 ? 'Broken' : i === 1 ? 'Common' : i === 2 ? 'Uncommon' : i === 3 ? 'Rare' : i === 4 ? 'Epic' : i === 5 ? 'Legendary' : i === 6 ? 'Mythic' : i === 7 ? 'Godly' : i === 8 ? 'Divine' : i === 9 ? 'Cosmic' : `Tier ${i}`,
     mult: 0.5 + (i * 0.5),
@@ -102,6 +99,10 @@ export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
 
 export const ITEMS: Record<string, Item> = {
     'wood': { id: 'wood', name: 'Wood', type: 'MATERIAL', description: 'Used for crafting.', count: 1, value: 1 },
+    'oak_log': { id: 'oak_log', name: 'Oak Log', type: 'MATERIAL', description: 'Sturdy oak wood.', count: 1, value: 2 },
+    'birch_log': { id: 'birch_log', name: 'Birch Log', type: 'MATERIAL', description: 'Pale birch wood.', count: 1, value: 2 },
+    'pine_log': { id: 'pine_log', name: 'Pine Log', type: 'MATERIAL', description: 'Sticky pine wood.', count: 1, value: 3 },
+    
     'stone': { id: 'stone', name: 'Stone', type: 'MATERIAL', description: 'Used for crafting.', count: 1, value: 1 },
     'iron_ore': { id: 'iron_ore', name: 'Iron Ore', type: 'MATERIAL', description: 'Can be smelted.', count: 1, value: 5 },
     'gold_ore': { id: 'gold_ore', name: 'Gold Ore', type: 'MATERIAL', description: 'Sparkly.', count: 1, value: 20 },
@@ -129,7 +130,7 @@ export const ITEMS: Record<string, Item> = {
 export const RECIPES: Recipe[] = [
     { id: 'potion_small', name: 'Small Potion', resultItemId: 'potion_small', yield: 1, skill: 'Alchemy', levelReq: 1, xpReward: 10, ingredients: [{itemId: 'herb', count: 2}], station: 'ALCHEMY_TABLE' },
     { id: 'potion_medium', name: 'Medium Potion', resultItemId: 'potion_medium', yield: 1, skill: 'Alchemy', levelReq: 10, xpReward: 50, ingredients: [{itemId: 'herb', count: 10}], station: 'ALCHEMY_TABLE' },
-    { id: 'wood_plank', name: 'Wood Plank', resultItemId: 'wood', yield: 2, skill: 'Woodcutting', levelReq: 1, xpReward: 5, ingredients: [{itemId: 'wood', count: 1}], station: 'WORKBENCH' },
+    { id: 'wood_plank', name: 'Wood Plank', resultItemId: 'wood', yield: 2, skill: 'Logging', levelReq: 1, xpReward: 5, ingredients: [{itemId: 'wood', count: 1}], station: 'WORKBENCH' },
     { id: 'fishing_rod', name: 'Fishing Rod', resultItemId: 'fishing_rod', yield: 1, skill: 'Crafting', levelReq: 1, xpReward: 15, ingredients: [{itemId: 'wood', count: 3}], station: 'WORKBENCH' },
     { id: 'iron_ingot', name: 'Iron Ingot', resultItemId: 'iron_ingot', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 20, ingredients: [{itemId: 'iron_ore', count: 2}], station: 'ANVIL' },
     { id: 'iron_key', name: 'Iron Key', resultItemId: 'iron_key', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 25, ingredients: [{itemId: 'iron_ingot', count: 1}], station: 'ANVIL' },
@@ -175,7 +176,7 @@ export const SECRETS_DATA: Secret[] = [
     { id: 'survivor', title: 'Survivor', description: 'Take 100 damage total.', hint: 'What does not kill you...', statBonus: { maxHp: 10 }, unlocked: false, perkId: 'iron_skin', condition: (gs) => (gs.counters['damage_taken'] || 0) >= 100 },
     { id: 'butcher', title: 'Butcher', description: 'Kill 20 enemies.', hint: 'Violence is the answer.', statBonus: { str: 2 }, unlocked: false, perkId: 'berserker', condition: (gs) => (gs.counters['enemies_killed'] || 0) >= 20 },
     
-    // Gathering
+    // Gathering / Logging Secrets
     { id: 'lumberjack', title: 'Lumberjack', description: 'Chop 20 Trees.', hint: 'Timber!', statBonus: { str: 2 }, unlocked: false, perkId: 'gatherer', condition: (gs) => (gs.counters['trees_cut'] || 0) >= 20 },
     { id: 'miner', title: 'Miner', description: 'Mine 20 Rocks.', hint: 'Dig deep.', statBonus: { str: 2 }, unlocked: false, perkId: 'gatherer', condition: (gs) => (gs.counters['rocks_mined'] || 0) >= 20 },
     { id: 'angler', title: 'Angler', description: 'Catch 10 Fish.', hint: 'Patience by the water.', statBonus: { dex: 2 }, unlocked: false, perkId: 'fish_friend', condition: (gs) => (gs.counters['fish_caught'] || 0) >= 10 },
@@ -187,331 +188,5 @@ export const SECRETS_DATA: Secret[] = [
     { id: 'scholar', title: 'Bookworm', description: 'Read 5 signs or books.', hint: 'Knowledge is power.', statBonus: { int: 3 }, unlocked: false, perkId: 'scholar', condition: (gs) => (gs.counters['lore_read'] || 0) >= 5 },
 ];
 
-export const LOOT_TABLE = {};
-
-export const TOWN_NAMES_PREFIX = ["North", "South", "East", "West", "New", "Old", "Great", "Little", "High", "Low", "Iron", "Gold", "Silver", "Crystal", "Dark", "Light", "Sun", "Moon", "Star", "River"];
-export const TOWN_NAMES_SUFFIX = ["haven", "shire", "grad", "wood", "field", "port", "ford", "mouth", "watch", "guard", "keep", "hold", "spire", "gate", "bridge", "fall", "peak", "valley", "dale", "stead"];
-
-export const MONSTER_PREFIXES = ["Angry", "Rabid", "Ancient", "Dark", "Cursed", "Giant", "Tiny", "Mutant", "Void", "Spectral", "Armored", "Savage", "Elite", "King", "Queen", "Lord", "Omega", "Alpha", "Primal", "Chaos"];
-export const MONSTER_BASES = ["Slime", "Rat", "Bat", "Wolf", "Bear", "Spider", "Snake", "Scorpion", "Goblin", "Skeleton", "Zombie", "Ghost", "Knight", "Mage", "Golem", "Drake", "Dragon", "Demon", "Beholder", "Lich", "Mimic", "Vampire", "Kraken", "Minotaur", "Specter"];
-
-const generateMap = (id: string, name: string, biome: string, difficulty: number, isTown: boolean): GameMap => {
-    const width = 20;
-    const height = 15;
-    const tiles: TileType[][] = [];
-
-    // Base terrain generation
-    for(let y=0; y<height; y++) {
-        const row: TileType[] = [];
-        for(let x=0; x<width; x++) {
-            if (isTown) {
-                 const r = Math.random();
-                 if (r > 0.95) row.push('TREE');
-                 else if (r > 0.90) row.push('FLOWER');
-                 else if (r > 0.8) row.push('DIRT_PATH');
-                 else row.push('GRASS');
-            } else {
-                const r = Math.random();
-                if (biome === 'DESERT') {
-                     if (r > 0.98) row.push('CACTUS'); 
-                     else if (r > 0.9) row.push('SAND');
-                     else row.push('SAND');
-                } else if (biome === 'SNOW') {
-                     if (r > 0.98) row.push('ICE'); 
-                     else row.push('SNOW');
-                } else { // FOREST/GRASS
-                     if (r > 0.85) row.push('TREE'); 
-                     else if (r > 0.95) row.push('ROCK');
-                     else if (r > 0.80) row.push('FLOWER');
-                     else row.push('GRASS');
-                }
-            }
-        }
-        tiles.push(row);
-    }
-    
-    // Clear Paths for Town
-    if (isTown) {
-        for(let i=1; i<19; i++) tiles[7][i] = 'DIRT_PATH';
-        for(let i=1; i<14; i++) tiles[i][10] = 'DIRT_PATH';
-        tiles[7][10] = 'SHRINE';
-    } else {
-        tiles[7][10] = biome === 'DESERT' ? 'SAND' : biome === 'SNOW' ? 'SNOW' : 'GRASS';
-    }
-    
-    const entities: Entity[] = [];
-    
-    // Town Entites
-    if (isTown) {
-        entities.push({ 
-            id: `mayor_${id}`, 
-            name: `${name} Mayor`, 
-            type: 'NPC', 
-            symbol: 'M', 
-            color: 'blue', 
-            pos: {x: 10, y: 6}, 
-            dialogue: [`Welcome to ${name}!`, "We have fine goods."] 
-        });
-        
-        entities.push({ 
-            id: `merch_${id}`, 
-            name: `Merchant`, 
-            type: 'NPC', 
-            symbol: '$', 
-            color: 'green', 
-            pos: {x: 12, y: 8}, 
-            dialogue: ["Buy my stuff!"] 
-        });
-
-        entities.push({ id: `anvil_${id}`, name: 'Anvil', type: 'OBJECT', subType: 'ANVIL', symbol: 'T', color: 'gray', pos: {x: 8, y: 8} });
-        entities.push({ id: `bench_${id}`, name: 'Workbench', type: 'OBJECT', subType: 'WORKBENCH', symbol: 'W', color: 'brown', pos: {x: 8, y: 10} });
-    }
-
-    // Procedural Enemy Generation
-    const maxEnemies = isTown ? 0 : Math.min(8, 1 + Math.floor(difficulty / 1.5));
-    if (!isTown) {
-        for(let i=0; i < maxEnemies; i++) {
-            let rx = Math.floor(Math.random() * (width - 2)) + 1;
-            let ry = Math.floor(Math.random() * (height - 2)) + 1;
-            if (tiles[ry][rx] === 'WALL' || (rx === 10 && ry === 7)) continue;
-            
-            const level = difficulty || 1;
-            
-            // Procedural Name: Prefix + Base
-            const base = MONSTER_BASES[Math.floor(Math.random() * MONSTER_BASES.length)];
-            const prefix = MONSTER_PREFIXES[Math.floor(Math.random() * MONSTER_PREFIXES.length)];
-            const fullName = `${prefix} ${base}`;
-
-            let aiType: 'MELEE' | 'RANGED' = 'MELEE';
-            let aggroRange = 5;
-            let attackRange = 1;
-            
-            if (['Skeleton', 'Lich', 'Mage', 'Beholder', 'Dragon', 'Ghost'].some(t => base.includes(t))) {
-                aiType = 'RANGED';
-                attackRange = 3 + Math.floor(Math.random() * 3);
-            }
-            if (prefix === 'Giant' || prefix === 'King') {
-                aggroRange += 3;
-            }
-
-            let hp = Math.floor((20 + level * 10) * (prefix === 'Elite' ? 2 : 1));
-
-            entities.push({ 
-                id: `enemy_${id}_${uid()}`, 
-                name: fullName, 
-                type: 'ENEMY', 
-                symbol: base[0], 
-                color: 'red', 
-                pos: {x: rx, y: ry}, 
-                hp, 
-                maxHp: hp, 
-                level,
-                aiType,
-                aggroRange,
-                attackRange
-            });
-        }
-    }
-
-    if (Math.random() > 0.6 && !isTown) {
-        let rx = Math.floor(Math.random() * (width - 2)) + 1;
-        let ry = Math.floor(Math.random() * (height - 2)) + 1;
-        if (!['WALL', 'TREE', 'ROCK', 'CACTUS', 'WATER', 'LAVA'].includes(tiles[ry][rx])) {
-            entities.push({ id: `crate_${id}_${uid()}`, name: 'Old Crate', type: 'OBJECT', subType: 'CRATE', symbol: '#', color: 'brown', pos: {x: rx, y: ry} });
-        }
-    }
-
-    return { id, name, width, height, tiles, entities, neighbors: {}, exits: [], difficulty, biome, isTown };
-};
-
-const generateInterior = (id: string, name: string, exitTo: {mapId: string, x: number, y: number, name: string}): GameMap => {
-    const width = 10;
-    const height = 8;
-    const tiles: TileType[][] = [];
-    
-    for(let y=0; y<height; y++) {
-        const row: TileType[] = [];
-        for(let x=0; x<width; x++) {
-            if (x===0 || x===width-1 || y===0 || y===height-1) row.push('WALL');
-            else row.push('PLANK');
-        }
-        tiles.push(row);
-    }
-    // Door Exit
-    tiles[height-1][5] = 'DOOR';
-    
-    const entities: Entity[] = [];
-    
-    // Add Exit Teleport
-    entities.push({
-        id: `exit_${id}`,
-        name: 'Exit',
-        type: 'OBJECT',
-        subType: 'DOOR',
-        symbol: '>',
-        color: 'yellow',
-        pos: {x: 5, y: height-1},
-        destination: exitTo
-    });
-
-    // Add Random Decor
-    entities.push({ id: `bed_${id}`, name: 'Bed', type: 'OBJECT', subType: 'BED', symbol: '=', color: 'red', pos: {x: 2, y: 2} });
-    
-    return { id, name, width, height, tiles, entities, neighbors: {}, exits: [], difficulty: 0, biome: 'INTERIOR', isTown: false };
-}
-
-const createWorld = () => {
-    const maps: Record<string, GameMap> = {};
-    const worldSize = 20;
-    
-    // Pick 20 Random Locations for Towns
-    const townLocations: string[] = [];
-    while(townLocations.length < 20) {
-        const x = Math.floor(Math.random() * worldSize);
-        const y = Math.floor(Math.random() * worldSize);
-        const key = `map_${x}_${y}`;
-        if (!townLocations.includes(key) && key !== 'map_10_10') townLocations.push(key);
-    }
-    townLocations.push('map_10_10'); // Ensure starter town is town
-
-    // 1. Generate Maps
-    for(let x=0; x<worldSize; x++) {
-        for(let y=0; y<worldSize; y++) {
-            const id = `map_${x}_${y}`;
-            let biome = 'GRASS';
-            if (y > 15) biome = 'DESERT';
-            if (y < 5) biome = 'SNOW';
-            
-            const isTown = townLocations.includes(id);
-            const difficulty = Math.floor(Math.abs(x-10) + Math.abs(y-10));
-            
-            let name = `Zone ${x}-${y}`;
-            if (isTown) {
-                const p = TOWN_NAMES_PREFIX[Math.floor(Math.random() * TOWN_NAMES_PREFIX.length)];
-                const s = TOWN_NAMES_SUFFIX[Math.floor(Math.random() * TOWN_NAMES_SUFFIX.length)];
-                name = `${p}${s}`;
-            }
-
-            maps[id] = generateMap(id, name, biome, difficulty, isTown);
-        }
-    }
-
-    // 2. Link Neighbors
-    for(let x=0; x<worldSize; x++) {
-        for(let y=0; y<worldSize; y++) {
-            const id = `map_${x}_${y}`;
-            const map = maps[id];
-            
-            if (y > 0) map.neighbors.UP = `map_${x}_${y-1}`;
-            if (y < worldSize - 1) map.neighbors.DOWN = `map_${x}_${y+1}`;
-            if (x > 0) map.neighbors.LEFT = `map_${x-1}_${y}`;
-            if (x < worldSize - 1) map.neighbors.RIGHT = `map_${x+1}_${y}`;
-
-            if (!map.neighbors.UP) for(let i=0; i<map.width; i++) map.tiles[0][i] = 'WALL';
-            if (!map.neighbors.DOWN) for(let i=0; i<map.width; i++) map.tiles[map.height-1][i] = 'WALL';
-            if (!map.neighbors.LEFT) for(let i=0; i<map.height; i++) map.tiles[i][0] = 'WALL';
-            if (!map.neighbors.RIGHT) for(let i=0; i<map.height; i++) map.tiles[i][map.width-1] = 'WALL';
-        }
-    }
-
-    // --- MANUALLY OVERRIDE STARTER TOWN (map_10_10) ---
-    // Custom layout for the starting area
-    const startMap = maps['map_10_10'];
-    startMap.name = "Haven's Rest";
-    // Clear tiles
-    startMap.tiles = Array(15).fill(null).map(() => Array(20).fill('GRASS'));
-    // Add Paths
-    for(let i=1; i<19; i++) startMap.tiles[7][i] = 'DIRT_PATH';
-    for(let i=1; i<14; i++) startMap.tiles[i][10] = 'DIRT_PATH';
-    startMap.tiles[7][10] = 'SHRINE';
-    // Clear Borders
-    if (startMap.neighbors.UP) startMap.tiles[0][10] = 'DIRT_PATH';
-    if (startMap.neighbors.DOWN) startMap.tiles[14][10] = 'DIRT_PATH';
-    if (startMap.neighbors.LEFT) startMap.tiles[7][0] = 'DIRT_PATH';
-    if (startMap.neighbors.RIGHT) startMap.tiles[7][19] = 'DIRT_PATH';
-    // Ensure walls on borders
-    if (!startMap.neighbors.UP) for(let i=0; i<20; i++) startMap.tiles[0][i] = 'WALL';
-    if (!startMap.neighbors.DOWN) for(let i=0; i<20; i++) startMap.tiles[14][i] = 'WALL';
-    if (!startMap.neighbors.LEFT) for(let i=0; i<15; i++) startMap.tiles[i][0] = 'WALL';
-    if (!startMap.neighbors.RIGHT) for(let i=0; i<15; i++) startMap.tiles[i][19] = 'WALL';
-    
-    // BUILD BUILDINGS
-    const buildHouse = (bx: number, by: number, w: number, h: number) => {
-        for(let y=by; y<by+h; y++) {
-            for(let x=bx; x<bx+w; x++) {
-                 startMap.tiles[y][x] = 'WALL';
-            }
-        }
-        // Door
-        const dx = bx + Math.floor(w/2);
-        const dy = by + h - 1;
-        startMap.tiles[dy][dx] = 'DOOR';
-        return {x: dx, y: dy};
-    };
-
-    const house1Door = buildHouse(2, 2, 5, 4); // Top Left
-    const house2Door = buildHouse(13, 2, 5, 4); // Top Right
-    const shopDoor = buildHouse(13, 9, 5, 4); // Bottom Right
-
-    // Create Interiors
-    const int1 = generateInterior('interior_home', "Hero's Home", { mapId: 'map_10_10', x: house1Door.x, y: house1Door.y + 1, name: "Haven's Rest" });
-    // Add Starter Chest
-    int1.entities.push({ id: 'start_chest', name: 'Old Chest', type: 'OBJECT', subType: 'CHEST', symbol: 'C', color: 'brown', pos: {x: 7, y: 2}, loot: 'potion_small' });
-    
-    const int2 = generateInterior('interior_neighbor', "Neighbor's House", { mapId: 'map_10_10', x: house2Door.x, y: house2Door.y + 1, name: "Haven's Rest" });
-    int2.entities.push({ id: 'npc_neighbor', name: 'Neighbor', type: 'NPC', symbol: 'N', color: 'green', pos: {x: 4, y: 3}, dialogue: ["Lovely day!"] });
-
-    const int3 = generateInterior('interior_shop', "General Store", { mapId: 'map_10_10', x: shopDoor.x, y: shopDoor.y + 1, name: "Haven's Rest" });
-    int3.entities.push({ id: 'npc_merch', name: 'Merchant', type: 'NPC', symbol: '$', color: 'yellow', pos: {x: 5, y: 3}, dialogue: ["We have the best prices."] });
-    int3.entities.push({ id: 'anvil_shop', name: 'Anvil', type: 'OBJECT', subType: 'ANVIL', symbol: 'T', color: 'gray', pos: {x: 2, y: 4} });
-    int3.entities.push({ id: 'bench_shop', name: 'Workbench', type: 'OBJECT', subType: 'WORKBENCH', symbol: 'W', color: 'brown', pos: {x: 8, y: 4} });
-
-    maps[int1.id] = int1;
-    maps[int2.id] = int2;
-    maps[int3.id] = int3;
-
-    // Add Teleporters to Main Map
-    startMap.entities = [
-        // Entities for Warps
-        { id: 'door_1', name: 'Door', type: 'OBJECT', subType: 'DOOR', pos: house1Door, symbol: '.', color: 'white', destination: { mapId: int1.id, x: 5, y: 7, name: 'Home' } },
-        { id: 'door_2', name: 'Door', type: 'OBJECT', subType: 'DOOR', pos: house2Door, symbol: '.', color: 'white', destination: { mapId: int2.id, x: 5, y: 7, name: 'Neighbor' } },
-        { id: 'door_3', name: 'Door', type: 'OBJECT', subType: 'DOOR', pos: shopDoor, symbol: '.', color: 'white', destination: { mapId: int3.id, x: 5, y: 7, name: 'Shop' } },
-        
-        // Town NPCs outside
-        { id: 'mayor_start', name: 'Mayor', type: 'NPC', symbol: 'M', color: 'blue', pos: {x: 9, y: 6}, dialogue: ["Welcome to Haven's Rest!", "Explore the world, Hunter."] },
-    ];
-    
-    // 3. Generate 1000 Procedural Secrets
-    for(let i=0; i < 1000; i++) {
-        const type = Math.random();
-        if (type > 0.6) {
-             const targetGold = Math.floor(Math.random() * 1000000) + 1000;
-             SECRETS_DATA.push({
-                 id: `sec_gold_${i}`,
-                 title: `Hoarder ${i}`,
-                 description: `Amass ${formatNumber(targetGold)} Gold.`,
-                 hint: 'Greed is infinite.',
-                 statBonus: { gold: 10 },
-                 unlocked: false,
-                 perkId: 'midas_touch',
-                 condition: (gs) => gs.stats.gold >= targetGold
-             });
-        } else if (type > 0.3) {
-             const targetLevel = Math.floor(Math.random() * 500) + 10;
-             SECRETS_DATA.push({
-                 id: `sec_lvl_${i}`,
-                 title: `Ascension ${i}`,
-                 description: `Reach Level ${targetLevel}.`,
-                 hint: 'Power grows.',
-                 statBonus: { str: 1, int: 1, dex: 1 },
-                 unlocked: false,
-                 perkId: 'titan_grip',
-                 condition: (gs) => gs.stats.level >= targetLevel
-             });
-        }
-    }
-
-    return maps;
-};
-
-export const MAPS = createWorld();
+// Initialize Maps via Generator (The array is mutated by reference in generator to add dynamic secrets)
+export const MAPS = createWorld(SECRETS_DATA);

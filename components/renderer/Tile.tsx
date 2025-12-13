@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { TileType } from '../types';
-import { ASSETS } from '../assets';
+import { TileType } from '../../types';
+import { ASSETS } from '../../assets';
 import clsx from 'clsx';
 
 interface TileProps {
@@ -27,6 +27,10 @@ export const Tile: React.FC<TileProps> = React.memo(({ type, x, y, isExit }) => 
     case 'LAVA': baseAsset = ASSETS.LAVA; bgColor = "bg-orange-600"; break;
     case 'DOOR': baseAsset = ASSETS.FLOOR; overlayAsset = ASSETS.DOOR; bgColor = "bg-amber-800"; break;
     case 'TREE': overlayAsset = ASSETS.TREE; bgColor = "bg-green-600"; break;
+    case 'OAK_TREE': overlayAsset = ASSETS.OAK_TREE; bgColor = "bg-green-700"; break;
+    case 'BIRCH_TREE': overlayAsset = ASSETS.BIRCH_TREE; bgColor = "bg-lime-200"; break;
+    case 'PINE_TREE': baseAsset = ASSETS.GRASS; overlayAsset = ASSETS.PINE_TREE; bgColor = "bg-emerald-800"; break;
+    case 'STUMP': baseAsset = ASSETS.GRASS; overlayAsset = ASSETS.STUMP; bgColor = "bg-amber-800"; break;
     case 'ROCK': overlayAsset = ASSETS.ROCK; bgColor = "bg-stone-500"; break;
     case 'SHRINE': baseAsset = ASSETS.FLOOR; overlayAsset = ASSETS.SHRINE; bgColor = "bg-purple-800"; break;
     case 'VOID': baseAsset = ASSETS.VOID; bgColor = "bg-black"; break;

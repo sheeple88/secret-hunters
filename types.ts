@@ -20,7 +20,7 @@ export type Stats = {
 
 export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
 
-export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Woodcutting' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing';
+export type SkillName = 'Strength' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing';
 
 export interface Skill {
   name: SkillName;
@@ -132,7 +132,7 @@ export interface Entity {
   magicType?: MagicType;
 }
 
-export type TileType = 'GRASS' | 'WALL' | 'WATER' | 'FLOOR' | 'TREE' | 'ROCK' | 'SHRINE' | 'PLANK' | 'DOOR' | 'LAVA' | 'VOID' | 'SAND' | 'MUD' | 'FLOWER' | 'WATERFALL' | 'SNOW' | 'ICE' | 'CACTUS' | 'STONE_BRICK' | 'GRAVESTONE' | 'DEEP_WATER' | 'BONES' | 'OBSIDIAN' | 'DIRT_PATH' | 'STAIRS_UP' | 'STAIRS_DOWN' | 'CRACKED_WALL';
+export type TileType = 'GRASS' | 'WALL' | 'WATER' | 'FLOOR' | 'TREE' | 'OAK_TREE' | 'BIRCH_TREE' | 'PINE_TREE' | 'STUMP' | 'ROCK' | 'SHRINE' | 'PLANK' | 'DOOR' | 'LAVA' | 'VOID' | 'SAND' | 'MUD' | 'FLOWER' | 'WATERFALL' | 'SNOW' | 'ICE' | 'CACTUS' | 'STONE_BRICK' | 'GRAVESTONE' | 'DEEP_WATER' | 'BONES' | 'OBSIDIAN' | 'DIRT_PATH' | 'STAIRS_UP' | 'STAIRS_DOWN' | 'CRACKED_WALL' | 'ROOF';
 
 export interface GameMap {
   id: string;
@@ -151,7 +151,7 @@ export interface GameMap {
 export interface LogEntry {
   id: string;
   message: string;
-  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST';
+  type: 'INFO' | 'COMBAT' | 'SECRET' | 'DIALOGUE' | 'SKILL' | 'LOOT' | 'QUEST' | 'DEBUG';
   timestamp: number;
 }
 

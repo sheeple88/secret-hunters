@@ -1,24 +1,25 @@
 
 import React from 'react';
-import { GameState, Stats, Item, Recipe } from '../types';
+import { GameState, Stats, Item, Recipe } from '../../types';
 import { Save } from 'lucide-react';
+import { formatNumber } from '../../constants';
 
-import { InventoryModal } from './modals/InventoryModal';
-import { SkillsModal } from './modals/SkillsModal';
-import { JournalModal } from './modals/JournalModal';
-import { BestiaryModal } from './modals/BestiaryModal';
-import { CraftingModal } from './modals/CraftingModal';
-import { PuzzleModal, PuzzleConfig } from './modals/PuzzleModal';
-import { DialogueModal } from './modals/DialogueModal';
-import { WorldMapModal } from './modals/WorldMapModal';
+import { InventoryModal } from '../modals/InventoryModal';
+import { SkillsModal } from '../modals/SkillsModal';
+import { JournalModal } from '../modals/JournalModal';
+import { BestiaryModal } from '../modals/BestiaryModal';
+import { CraftingModal } from '../modals/CraftingModal';
+import { PuzzleModal, PuzzleConfig } from '../modals/PuzzleModal';
+import { DialogueModal } from '../modals/DialogueModal';
+import { WorldMapModal } from '../modals/WorldMapModal';
 
-import { GameControls } from './hud/GameControls';
-import { StatusBar } from './hud/StatusBar';
-import { ActionLog } from './hud/ActionLog';
-import { DeathScreen } from './hud/DeathScreen';
-import { QuestTracker } from './hud/QuestTracker';
-import { UnlockNotification } from './hud/UnlockNotification';
-import { DebugOverlay } from './hud/DebugOverlay';
+import { GameControls } from './GameControls';
+import { StatusBar } from './StatusBar';
+import { ActionLog } from './ActionLog';
+import { DeathScreen } from './DeathScreen';
+import { QuestTracker } from './QuestTracker';
+import { UnlockNotification } from './UnlockNotification';
+import { DebugOverlay } from './DebugOverlay';
 
 interface GameHUDProps {
   gameState: GameState;

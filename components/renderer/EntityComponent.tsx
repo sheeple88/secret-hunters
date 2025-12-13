@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Entity, AnimationType, WeaponType } from '../types';
-import { ASSETS } from '../assets';
+import { Entity, AnimationType, WeaponType } from '../../types';
+import { ASSETS } from '../../assets';
 import clsx from 'clsx';
 
 interface EntityProps {
