@@ -11,10 +11,11 @@ import { GameHUD } from './components/hud/GameHUD';
 import { PuzzleConfig } from './components/modals/PuzzleModal';
 import { handlePlayerMove } from './systems/movement';
 import { generateBossRewards, generateLoot } from './services/itemService';
-import { generateHavensRest } from './systems/maps/havensRest';
+import { regenerateAllMaps } from './systems/mapGenerator';
 import { checkQuestUpdate } from './systems/questUtils';
 import { handlePlayerAttack } from './systems/combat/playerAttack';
-import { processEnemyTurn, processSpawners } from './systems/combat/enemyAI';
+import { processEnemyTurn } from './systems/combat/enemyAI';
+import { processEnemyTurns, processSpawners } from './systems/ai'; 
 
 // --- Helper Functions ---
 const getTimestamp = () => Date.now();
@@ -114,8 +115,9 @@ const distributePoints = (stats: Stats, allocation: any, points: number): { newS
 };
 
 export default function App() {
+  // --- FRESH STATE INITIALIZATION (NO SAVE/LOAD FORCED) ---
   const [gameState, setGameState] = useState<GameState>({
-    playerPos: { x: 30, y: 25 }, // Centered in new 60x50 map
+    playerPos: { x: 30, y: 28 }, // Center of Havens Rest (Square is near 30,25)
     playerFacing: 'DOWN',
     currentMapId: 'map_10_10',
     stats: INITIAL_STATS,
@@ -132,16 +134,19 @@ export default function App() {
     equippedCosmetic: null,
     activeTitle: null,
     bestiary: [],
-    counters: { map_revision: 0, steps_taken: 0, enemies_killed: 0, trees_cut: 0, rocks_mined: 0, fish_caught: 0, items_crafted: 0, damage_taken: 0, puzzles_solved: 0, lore_read: 0 }, 
-    logs: [{ id: 'init', message: 'Welcome to Secret Hunters!', type: 'INFO', timestamp: Date.now() }],
+    counters: { map_revision: 999, steps_taken: 0, enemies_killed: 0, trees_cut: 0, rocks_mined: 0, fish_caught: 0, items_crafted: 0, damage_taken: 0, puzzles_solved: 0, lore_read: 0 }, 
+    logs: [{ id: 'init', message: 'You arrive at Havens Rest.', type: 'INFO', timestamp: Date.now() }],
     flags: {},
     lastAction: null,
     isCombat: false,
     lastCombatTime: 0,
     combatTargetId: null,
     activeQuest: null,
-    // EXPLORATION GRID SIZE FIX: 50 rows, 60 cols for map_10_10
-    exploration: { 'map_10_10': Array(50).fill(null).map((_, y) => Array(60).fill(0).map((_, x) => (Math.abs(x-30) <= 6 && Math.abs(y-25) <= 6) ? 1 : 0)) },
+    // Exploration: Initialize interior as revealed (10x8), town as hidden (60x50)
+    exploration: { 
+        'interior_home': Array(8).fill(null).map(() => Array(10).fill(1)), 
+        'map_10_10': Array(50).fill(null).map(() => Array(60).fill(0)) 
+    },
     worldModified: {},
     knownWaypoints: [],
     knownLocations: [],
@@ -155,119 +160,68 @@ export default function App() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [activePuzzle, setActivePuzzle] = useState<PuzzleConfig | null>(null);
   const [activeDialogue, setActiveDialogue] = useState<{title: string, messages: string[]} | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState(0);
   
   const [combatNumbers, setCombatNumbers] = useState<Record<string, number>>({});
   const [viewScale, setViewScale] = useState(1);
   const [userZoom, setUserZoom] = useState(1.0); 
   const [volume, setVolume] = useState(0.3); 
-  
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  // --- NEW INTEGRATION START ---
-
-  // 1. Force Map Regeneration & Fix Save Compatibility
+  // --- HARD RESET MAPS ON MOUNT ---
   useEffect(() => {
-      // Force regeneration of Haven's Rest to ensure new layout/entities are loaded into global MAPS
-      generateHavensRest(MAPS);
-      console.log("Haven's Rest Map Regenerated (60x50)");
+      console.log("HARD RESET: Wiping LocalStorage and Regenerating World");
+      // Force regeneration of all maps to ensure new Town logic is used
+      regenerateAllMaps(MAPS, ALL_SECRETS);
+  }, []);
 
-      // Fix Save Data Mismatch (Exploration Grid Size)
-      setGameState(prev => {
-          const currentMap = MAPS[prev.currentMapId];
-          const currentExp = prev.exploration[prev.currentMapId];
-          
-          // Check if map size matches exploration grid
-          if (currentMap && currentExp && (currentExp.length !== currentMap.height || (currentExp[0] && currentExp[0].length !== currentMap.width))) {
-              console.warn("Map dimensions mismatch detected. Resetting town exploration.");
+  // NEW: Combat Number Cleanup Loop
+  useEffect(() => {
+      if (Object.keys(combatNumbers).length > 0) {
+          const timer = setTimeout(() => {
+              setCombatNumbers({});
+          }, 1200); 
+          return () => clearTimeout(timer);
+      }
+  }, [combatNumbers]);
+
+  // NEW: AI Game Loop (Tick)
+  useEffect(() => {
+      const aiInterval = setInterval(() => {
+          setGameState(prev => {
+              if (activeModal || activePuzzle || activeDialogue) return prev;
+
+              const map = MAPS[prev.currentMapId];
+              if (!map || map.biome === 'INTERIOR') return prev; 
+
+              // 1. Process Spawners
+              const entitiesWithSpawns = processSpawners(map.entities, map, prev.playerPos, prev.counters.steps_taken || 0);
               
-              const newExp = Array(currentMap.height).fill(null).map(() => Array(currentMap.width).fill(0));
-              // Reveal spawn area
-              const spawnX = 30;
-              const spawnY = 25;
-              for(let y=spawnY-5; y<=spawnY+5; y++) {
-                  for(let x=spawnX-5; x<=spawnX+5; x++) {
-                      if(newExp[y] && newExp[y][x] !== undefined) newExp[y][x] = 1;
-                  }
+              // 2. Process Enemy Movement
+              const aiResult = processEnemyTurns(prev, { ...map, entities: entitiesWithSpawns }, prev.playerPos);
+              
+              // Update Map
+              MAPS[prev.currentMapId].entities = aiResult.entities;
+
+              // Handle Damage to Player
+              let newStats = { ...prev.stats };
+              let newCounters = { ...prev.counters };
+              if (aiResult.damageToPlayer > 0) {
+                  newStats.hp -= aiResult.damageToPlayer;
+                  newCounters.damage_taken = (newCounters.damage_taken || 0) + aiResult.damageToPlayer;
               }
 
               return {
                   ...prev,
-                  playerPos: { x: 30, y: 25 }, // Safe spawn in center of new map
-                  currentMapId: 'map_10_10',
-                  exploration: {
-                      ...prev.exploration,
-                      'map_10_10': newExp
-                  },
-                  logs: [...prev.logs, { id: uid(), message: "World Updated: Map Layout Reset", type: 'INFO', timestamp: Date.now() }]
+                  stats: newStats,
+                  counters: newCounters,
+                  logs: [...prev.logs, ...aiResult.logs].slice(-50), 
+                  animations: { ...prev.animations, ...aiResult.anims } // Fixed property access 'anims'
               };
-          }
-          return prev;
-      });
-  }, []);
-
-  // 2. Cleanup Combat Numbers
-  useEffect(() => {
-      if (Object.keys(combatNumbers).length > 0) {
-          const t = setTimeout(() => setCombatNumbers({}), 1500);
-          return () => clearTimeout(t);
-      }
-  }, [combatNumbers]);
-
-  // 3. AI Tick (World Liveliness)
-  useEffect(() => {
-      const interval = setInterval(() => {
-          setGameState(prev => {
-              if (prev.stats.hp <= 0 || activeModal) return prev; // Pause logic
-
-              const map = MAPS[prev.currentMapId];
-              if (!map) return prev;
-
-              // Process Spawners & Enemies
-              let nextEntities = processSpawners(map, map.entities); 
-              
-              const aiRes = processEnemyTurn(prev, { ...map, entities: nextEntities });
-              
-              // Apply updates back to mutable map (for renderer)
-              MAPS[prev.currentMapId].entities = aiRes.updatedEntities;
-
-              // Only update state if meaningful changes (damage or logs) to prevent render thrashing
-              if (aiRes.damageToPlayer > 0 || aiRes.logs.length > 0) {
-                  const newStats = { ...prev.stats };
-                  newStats.hp -= aiRes.damageToPlayer;
-                  
-                  if (aiRes.damageToPlayer > 0) {
-                      setCombatNumbers(c => ({ ...c, 'player': (c['player']||0) + aiRes.damageToPlayer }));
-                  }
-
-                  if (newStats.hp <= 0) setActiveModal('DEATH');
-
-                  return {
-                      ...prev,
-                      stats: newStats,
-                      logs: [...prev.logs, ...aiRes.logs].slice(-50),
-                      animations: { ...prev.animations, ...aiRes.animations },
-                      counters: { ...prev.counters, damage_taken: (prev.counters.damage_taken || 0) + aiRes.damageToPlayer }
-                  };
-              }
-              
-              // If AI moved but no damage, we still might want to trigger render?
-              // The time tick below usually handles this, or movement triggers re-render via player.
-              // For smoother enemies, we force a re-render if enemies exist
-              if (nextEntities.some(e => e.type === 'ENEMY')) {
-                  return { ...prev }; // Force update
-              }
-
-              return prev;
           });
-      }, 1000); // 1s Tick
-      return () => clearInterval(interval);
-  }, [activeModal]);
-
-  // --- NEW INTEGRATION END ---
+      }, 800); 
+      return () => clearInterval(aiInterval);
+  }, [activeModal, activePuzzle, activeDialogue]);
 
   const handleOpenModal = (modalName: string | null) => {
       setActiveModal(modalName);
@@ -309,7 +263,7 @@ export default function App() {
       return newState;
   }, []);
 
-  // --- STAT ALLOCATION HANDLERS ---
+  // --- HANDLERS ---
   const handleStatIncrease = (stat: keyof Stats) => {
       setGameState(prev => {
           if (prev.stats.unspentStatPoints <= 0) return prev;
@@ -369,124 +323,6 @@ export default function App() {
       });
   };
 
-  // --- SCALE & MOBILE LOGIC ---
-  useEffect(() => {
-      const handleResize = () => {
-          const w = window.innerWidth;
-          const h = window.innerHeight;
-          setViewportSize({ w, h });
-          const mobileCheck = w <= 768;
-          setIsMobile(mobileCheck);
-          const tilesWide = mobileCheck ? 11 : 26;
-          const desiredScale = w / (tilesWide * 32);
-          const clampedScale = Math.max(0.5, Math.min(3.0, desiredScale * userZoom));
-          setViewScale(clampedScale);
-      };
-      window.addEventListener('resize', handleResize);
-      handleResize(); 
-      return () => window.removeEventListener('resize', handleResize);
-  }, [userZoom]);
-
-  // --- SAVE/LOAD ---
-  useEffect(() => {
-      const saved = localStorage.getItem('sh_save_v1');
-      if (saved) {
-          try {
-              const parsed = JSON.parse(saved);
-              if (parsed.gameState && parsed.gameState.stats) {
-                  const gs = parsed.gameState;
-                  if (parsed.settings) {
-                      setVolume(parsed.settings.volume ?? 0.3);
-                      setUserZoom(parsed.settings.zoom ?? 1.0);
-                  }
-                  
-                  // MIGRATIONS
-                  if (gs.secrets && Array.isArray(gs.secrets) && !gs.unlockedSecretIds) {
-                      gs.unlockedSecretIds = gs.secrets.filter((s: any) => s.unlocked).map((s: any) => s.id);
-                      delete gs.secrets;
-                  }
-                  if (!gs.unlockedAchievementIds) gs.unlockedAchievementIds = [];
-                  if (!gs.completedQuestIds) gs.completedQuestIds = [];
-                  if (!gs.unlockedCosmetics) gs.unlockedCosmetics = []; // NEW
-                  if (gs.equippedCosmetic === undefined) gs.equippedCosmetic = null; // NEW
-                  if (gs.activeTitle === undefined) gs.activeTitle = null; // NEW
-
-                  // MIGRATION: Add new skills if missing
-                  const ensureSkill = (name: SkillName) => {
-                      if (!gs.skills[name]) gs.skills[name] = { name, level: 1, xp: 0 };
-                  };
-                  ensureSkill('Attack');
-                  ensureSkill('Strength');
-                  ensureSkill('Defence');
-                  ensureSkill('Constitution');
-                  ensureSkill('Smithing');
-                  ensureSkill('Herblore');
-                  ensureSkill('Fletching');
-                  ensureSkill('Crafting');
-
-                  let exp = gs.exploration || {};
-                  Object.keys(MAPS).forEach(mapId => {
-                      const map = MAPS[mapId];
-                      if (exp[mapId]) {
-                          if (exp[mapId].length !== map.height || (exp[mapId][0] && exp[mapId][0].length !== map.width)) {
-                              exp[mapId] = Array(map.height).fill(null).map(() => Array(map.width).fill(0));
-                              // Force Haven's Rest to reset if size is wrong
-                              if (mapId === 'map_10_10') {
-                                   exp[mapId] = Array(50).fill(null).map((_, y) => Array(60).fill(0).map((_, x) => (Math.abs(x-30) <= 6 && Math.abs(y-25) <= 6) ? 1 : 0));
-                              }
-                          }
-                      }
-                  });
-
-                  if (gs.skills && gs.skills['Woodcutting']) {
-                      gs.skills['Logging'] = gs.skills['Woodcutting'];
-                      gs.skills['Logging'].name = 'Logging';
-                      delete gs.skills['Woodcutting'];
-                  }
-                  if (!gs.skills['Logging']) gs.skills['Logging'] = { name: 'Logging', level: 1, xp: 0 };
-                  if (!gs.skills['Fishing']) gs.skills['Fishing'] = { name: 'Fishing', level: 1, xp: 0 };
-                  if (!gs.skills['Cooking']) gs.skills['Cooking'] = { name: 'Cooking', level: 1, xp: 0 };
-                  if (!gs.knownRecipes) gs.knownRecipes = DEFAULT_RECIPES;
-                  if (gs.autoDistributeStats === undefined) {
-                      gs.autoDistributeStats = false;
-                      gs.statAllocation = { str: 25, dex: 25, int: 25, hp: 20, regeneration: 5 };
-                      gs.stats.unspentStatPoints = 0;
-                  }
-                  if (gs.worldTier === undefined) gs.worldTier = 0;
-
-                  setGameState({ 
-                      ...gs, 
-                      exploration: exp,
-                      animations: {}, 
-                      worldModified: gs.worldModified || {}, 
-                      time: gs.time || 800 
-                  });
-              } else if (parsed.stats) {
-                  setGameState(prev => ({...prev, ...parsed})); 
-              }
-          } catch (e) { console.error(e); }
-      }
-      setHasLoaded(true);
-  }, []);
-
-  const handleSave = () => {
-      const saveData = {
-          gameState: gameState,
-          settings: { volume, zoom: userZoom },
-          timestamp: Date.now()
-      };
-      localStorage.setItem('sh_save_v1', JSON.stringify(saveData));
-      setLastSaved(Date.now());
-      setIsSaving(true);
-      setTimeout(() => setIsSaving(false), 500);
-  };
-
-  useEffect(() => {
-      if (!hasLoaded) return;
-      const interval = setInterval(handleSave, 10000);
-      return () => clearInterval(interval);
-  }, [gameState, hasLoaded, volume, userZoom]);
-
   // --- TIME & REGEN LOOPS ---
   useEffect(() => {
       const interval = setInterval(() => setGameState(p => ({ ...p, time: (p.time + 1) >= 2400 ? 0 : p.time + 1 })), 250);
@@ -510,7 +346,7 @@ export default function App() {
               let secretsChanged = false;
               let achievementChanged = false;
 
-              // 1. Check Secrets
+              // Secrets
               ALL_SECRETS.forEach(s => {
                   if (!newSecretIds.includes(s.id) && s.condition(prev)) {
                       secretsChanged = true;
@@ -530,7 +366,7 @@ export default function App() {
                   }
               });
 
-              // 2. Check Achievements
+              // Achievements
               ACHIEVEMENTS.forEach(ach => {
                   if (!newAchievementIds.includes(ach.id) && ach.condition(prev)) {
                       achievementChanged = true;
@@ -564,11 +400,10 @@ export default function App() {
               
               return { ...prev, stats: newStats };
           });
-      }, 2000); // Check every 2s
+      }, 2000); 
       return () => clearInterval(interval);
   }, []);
 
-  // --- HANDLER FUNCTIONS ---
   const handleTogglePerk = (id: string) => {
       if (PERKS[id]) {
           setGameState(p => { 
@@ -576,7 +411,6 @@ export default function App() {
               return { ...p, equippedPerks: eq }; 
           });
       } else {
-          // Assume Cosmetic
           setGameState(p => ({ 
               ...p, 
               equippedCosmetic: id === 'COSMETIC_NONE' ? null : (p.equippedCosmetic === id ? null : id) 
@@ -642,7 +476,7 @@ export default function App() {
               }
               else if (entity.name === 'Chicken') {
                   playSound('UI_CLICK');
-                  newAnimations[entity.id] = 'DODGE'; // Chicken hops
+                  newAnimations[entity.id] = 'DODGE';
                   newCounters['poked_chicken'] = (newCounters['poked_chicken'] || 0) + 1;
                   newLogs.push({ id: uid(), message: "Bawk!", type: 'INFO', timestamp: Date.now() });
               }
@@ -723,7 +557,7 @@ export default function App() {
               activeQuest: newActiveQuest, 
               stats: newStats, 
               skills: newSkills, 
-              completedQuestIds,
+              completedQuestIds, 
               lastCombatTime: newCombatTime,
               bestiary: newBestiary,
               worldTier: newWorldTier
@@ -889,6 +723,7 @@ export default function App() {
       return 0.6;
   }, [gameState.time]);
 
+  // Viewport calculation
   const cameraPosition = useMemo(() => {
       const currentMap = MAPS[gameState.currentMapId];
       if (!currentMap) return { x: 0, y: 0 };
@@ -910,6 +745,24 @@ export default function App() {
       
       return { x: targetX, y: targetY };
   }, [gameState.playerPos, gameState.currentMapId, viewScale, viewportSize]);
+
+  // Window Resize Listener
+  useEffect(() => {
+      const handleResize = () => {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          setViewportSize({ w, h });
+          const mobileCheck = w <= 768;
+          setIsMobile(mobileCheck);
+          const tilesWide = mobileCheck ? 11 : 26;
+          const desiredScale = w / (tilesWide * 32);
+          const clampedScale = Math.max(0.5, Math.min(3.0, desiredScale * userZoom));
+          setViewScale(clampedScale);
+      };
+      window.addEventListener('resize', handleResize);
+      handleResize(); 
+      return () => window.removeEventListener('resize', handleResize);
+  }, [userZoom]);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden flex items-center justify-center">
@@ -935,9 +788,17 @@ export default function App() {
             onInteract={handleInteraction}
             onEquip={toggleEquip}
             onCraft={craft}
-            onRespawn={() => { setGameState(p => ({ ...p, playerPos: {x:30,y:25}, currentMapId: 'map_10_10', stats: { ...p.stats, hp: p.stats.maxHp } })); handleOpenModal(null); }}
-            onResetSave={() => { localStorage.removeItem('sh_save_v1'); window.location.reload(); }}
-            onSaveGame={handleSave}
+            onRespawn={() => { 
+                setGameState(p => ({ 
+                    ...p, 
+                    playerPos: {x: 30, y: 28}, // RESPAWN AT NEW TOWN CENTER
+                    currentMapId: 'map_10_10', 
+                    stats: { ...p.stats, hp: p.stats.maxHp } 
+                })); 
+                handleOpenModal(null); 
+            }}
+            onResetSave={() => {}} // No-op, button removed
+            onSaveGame={() => {}} // No-op
             onConsume={handleConsume}
             onTogglePerk={handleTogglePerk}
             onPuzzleSolve={handlePuzzleSolve}
@@ -949,12 +810,12 @@ export default function App() {
             onStatIncrease={handleStatIncrease}
             onAutoConfigChange={handleAutoDistributionChange}
             onResetStats={handleResetStats}
-            isSaving={isSaving}
+            isSaving={false}
             volume={volume}
             setVolume={setVolume}
             zoom={userZoom}
             setZoom={setUserZoom}
-            lastSaved={lastSaved}
+            lastSaved={0}
         />
     </div>
   );

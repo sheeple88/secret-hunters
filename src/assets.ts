@@ -1,4 +1,5 @@
 
+
 // Helper for pixel art assets
 export const createAsset = (svgContent: string) => 
   `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${svgContent}</svg>`)}`;
@@ -313,6 +314,12 @@ export const ASSETS = {
     <rect x="9" y="8" width="2" height="4" fill="#92400e" transform="rotate(45 10 10)"/>
     <circle cx="8" cy="7" r="3" fill="#f97316" opacity="0.8"/>
     <circle cx="8" cy="7" r="1.5" fill="#fef08a" class="animate-pulse"/>
+  `),
+  FURNACE: createAsset(`
+    <rect x="3" y="4" width="10" height="10" fill="#57534e"/>
+    <rect x="5" y="10" width="6" height="3" fill="#292524"/>
+    <path d="M6,12 L7,11 L8,12 L9,11 L10,12" fill="#ef4444" class="animate-pulse"/>
+    <rect x="3" y="4" width="10" height="2" fill="#78716c"/>
   `),
   FISHING_SPOT: createAsset(`
     <circle cx="8" cy="8" r="6" stroke="#93c5fd" stroke-width="1" fill="none" class="animate-ping" opacity="0.5"/>

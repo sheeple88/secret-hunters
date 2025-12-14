@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Entity, AnimationType, WeaponType } from '../../types';
 import { ASSETS } from '../../assets';
@@ -70,6 +71,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       if (entity.subType === 'WORKBENCH') sprite = ASSETS.WORKBENCH;
       if (entity.subType === 'ALCHEMY_TABLE') sprite = ASSETS.ALCHEMY_TABLE;
       if (entity.subType === 'CAMPFIRE') sprite = ASSETS.CAMPFIRE;
+      if (entity.subType === 'FURNACE') sprite = ASSETS.FURNACE;
       if (entity.subType === 'FISHING_SPOT') { sprite = ASSETS.FISHING_SPOT; zIndex = 10; }
       if (entity.subType === 'PRESSURE_PLATE') { sprite = ASSETS.PRESSURE_PLATE; zIndex = 10; }
       if (entity.subType === 'PUSH_BLOCK') sprite = ASSETS.PUSH_BLOCK;

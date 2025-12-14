@@ -56,7 +56,6 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
             destination: { mapId: intId, x: 6, y: 8, name: name }
         });
         
-        // Return center for NPC assignment if needed
         return {x: dx, y: dy};
     };
 
@@ -65,28 +64,34 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
             id: `lamp_${uid()}`,
             name: 'Street Lamp',
             type: 'OBJECT',
-            subType: 'LAMP' as any, // New subtype
+            subType: 'LAMP' as any,
             symbol: 'i',
             color: 'yellow',
             pos: {x, y}
         });
     };
 
-    // --- DISTRICTS ---
+    // --- DISTRICTS (60x50 Layout) ---
 
-    // 1. Central Square (30, 25)
-    fillRect(25, 20, 10, 10, 'STONE_BRICK'); // Plaza
+    // 1. Central Square (30, 25) - The Heart
+    fillRect(25, 20, 10, 10, 'STONE_BRICK'); // Plaza 10x10
     entities.push({ id: 'fountain', name: 'Grand Fountain', type: 'OBJECT', subType: 'FOUNTAIN' as any, symbol: 'O', color: 'cyan', pos: {x: 30, y: 25} });
     entities.push({ id: `wp_${id}`, name: 'Town Waypoint', type: 'OBJECT', subType: 'WAYPOINT', symbol: 'O', color: 'cyan', pos: {x: 28, y: 22} });
     
     // 2. Mayor's Hall (North of Square)
     buildHouse(26, 5, 8, 6, "Mayor's Hall", "Mayor");
-    fillRect(29, 11, 2, 9, 'STONE_BRICK'); // Path to square
+    fillRect(29, 11, 2, 9, 'STONE_BRICK'); // Path from Hall to Square
     addLamp(28, 11); addLamp(31, 11);
 
     // 3. Residential District (West)
-    // 2 Rows of houses
+    // Vertical Road
+    fillRect(19, 10, 2, 30, 'DIRT_PATH');
+    // Connecting Road to Square
+    fillRect(21, 25, 4, 2, 'DIRT_PATH');
+
+    // Houses
     const houses = [
+        // Ensure "My Home" is one of these, specifically mapped to interior_home
         {x: 5, y: 10, w: 6, h: 5, owner: 'Citizen'},
         {x: 12, y: 10, w: 6, h: 5, owner: 'Citizen'},
         {x: 5, y: 18, w: 6, h: 5, owner: 'Kid'},
@@ -95,22 +100,38 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
         {x: 12, y: 26, w: 6, h: 5, owner: 'Citizen'},
     ];
     
-    houses.forEach(h => {
-        buildHouse(h.x, h.y, h.w, h.h, `${h.owner}'s House`, h.owner);
-        // Path to main road
-        fillRect(h.x + 3, h.y + h.h, 1, 2, 'DIRT_PATH'); 
+    // Special handling for Player Home to link to fixed interior_home ID
+    const homeX = 4; 
+    const homeY = 35; // Put player home south west
+    fillRect(homeX, homeY, 6, 4, 'ROOF');
+    fillRect(homeX, homeY+4, 6, 1, 'WALL');
+    tiles[homeY+4][homeX+3] = 'DOOR';
+    
+    // Create the interior_home map explicitly
+    const intHome = generateHouseInterior('interior_home', "Hero's Home", "Hero", { mapId: id, x: homeX+3, y: homeY+5, name: "Haven's Rest" });
+    maps['interior_home'] = intHome;
+    
+    entities.push({
+        id: `door_home`,
+        name: "My Home",
+        type: 'OBJECT',
+        subType: 'DOOR',
+        pos: {x: homeX+3, y: homeY+4},
+        symbol: '.',
+        color: 'white',
+        destination: { mapId: 'interior_home', x: 6, y: 8, name: "My Home" }
     });
     
-    // Main Residential Road (Vertical)
-    fillRect(19, 10, 2, 30, 'DIRT_PATH');
-    // Connect to Square
-    fillRect(21, 25, 4, 2, 'DIRT_PATH');
+    houses.forEach(h => {
+        buildHouse(h.x, h.y, h.w, h.h, `${h.owner}'s House`, h.owner);
+        fillRect(h.x + 3, h.y + h.h, 1, 2, 'DIRT_PATH'); // Path to road
+    });
 
     // 4. Market Row (East)
-    fillRect(40, 22, 15, 8, 'PLANK'); // Market floor
+    fillRect(40, 22, 15, 8, 'PLANK'); // Wood floor for market
     entities.push(
         { id: 'stall_1', name: 'Fruit Stall', type: 'OBJECT', subType: 'CRATE', symbol: '#', color: 'green', pos: {x: 42, y: 23}, loot: 'apple' },
-        { id: 'stall_2', name: 'Weapon Stall', type: 'OBJECT', subType: 'ANVIL', symbol: 'T', color: 'gray', pos: {x: 46, y: 23} }, // Visual only
+        { id: 'stall_2', name: 'Weapon Stall', type: 'OBJECT', subType: 'ANVIL', symbol: 'T', color: 'gray', pos: {x: 46, y: 23} }, 
         { id: 'stall_3', name: 'Misc Stall', type: 'OBJECT', subType: 'CRATE', symbol: '#', color: 'brown', pos: {x: 50, y: 23} }
     );
     // Connect to Square
@@ -140,19 +161,17 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
     }
     
     // --- AMBIENT LIFE ---
-    // Chickens
-    for(let i=0; i<5; i++) {
+    for(let i=0; i<8; i++) {
         entities.push({
             id: `chicken_${i}`,
             name: 'Chicken',
-            type: 'NPC', // Passive AI
+            type: 'NPC', 
             symbol: 'c',
             color: 'white',
             pos: {x: 50 + Math.floor(Math.random()*5), y: 35 + Math.floor(Math.random()*5)},
             aiType: 'PASSIVE' as any
         });
     }
-    // Cats
     entities.push({ id: 'cat_1', name: 'Stray Cat', type: 'NPC', symbol: 'f', color: 'orange', pos: {x: 10, y: 30}, aiType: 'PASSIVE' as any });
 
     // --- POPULATE NPCs ---
@@ -163,7 +182,7 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
             type: 'NPC',
             symbol: npc.symbol,
             color: npc.color,
-            pos: npc.dayPos, // Start at day pos
+            pos: npc.dayPos,
             dialogue: npc.dialogue,
             schedule: { dayPos: npc.dayPos, nightPos: npc.nightPos },
             questId: npc.questId
@@ -171,16 +190,12 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
     });
 
     // --- EXITS TO WORLD ---
-    // West Gate
-    fillRect(0, 25, 1, 4, 'DIRT_PATH');
-    // East Gate
-    fillRect(59, 25, 1, 4, 'DIRT_PATH');
-    // North Gate
-    fillRect(30, 0, 4, 1, 'DIRT_PATH');
-    // South Gate
-    fillRect(30, 49, 4, 1, 'DIRT_PATH');
+    fillRect(0, 25, 1, 4, 'DIRT_PATH'); // West
+    fillRect(59, 25, 1, 4, 'DIRT_PATH'); // East
+    fillRect(30, 0, 4, 1, 'DIRT_PATH'); // North
+    fillRect(30, 49, 4, 1, 'DIRT_PATH'); // South
 
-    // Fill empty spaces with trees/decor
+    // Fill empty spaces
     for(let y=0; y<height; y++) {
         for(let x=0; x<width; x++) {
             if (tiles[y][x] === 'GRASS' && Math.random() > 0.95) {
@@ -196,11 +211,12 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
         height, 
         tiles, 
         entities, 
-        neighbors: {}, // Set by mapGenerator
+        neighbors: {}, 
         exits: [], 
         difficulty: 0, 
         biome: 'GRASS', 
-        isTown: true 
+        isTown: true,
+        source: 'havensRest.ts (v7 - 60x50)'
     };
     
     return maps[id];

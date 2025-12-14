@@ -12,7 +12,6 @@ import { DialogueModal } from '../modals/DialogueModal';
 import { WorldMapModal } from '../modals/WorldMapModal';
 import { MerchantModal } from '../modals/MerchantModal';
 import { SettingsModal } from '../modals/SettingsModal';
-// NEW
 import { ArtisanMenu } from '../skills/ArtisanMenu';
 
 import { GameControls } from './GameControls';
@@ -48,7 +47,6 @@ interface GameHUDProps {
   onAutoConfigChange: (enabled: boolean, allocation: any) => void;
   onResetStats: () => void;
   
-  // Settings Props
   volume: number;
   setVolume: (v: number) => void;
   zoom: number;
@@ -69,8 +67,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onEquip,
   onCraft,
   onRespawn,
-  onResetSave,
-  onSaveGame,
   onConsume,
   onTogglePerk,
   onPuzzleSolve,
@@ -82,10 +78,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onStatIncrease,
   onAutoConfigChange,
   onResetStats,
-  volume, setVolume, zoom, setZoom, lastSaved, isSaving
+  volume, setVolume, zoom, setZoom
 }) => {
 
-  // Check for unseen secret flag from App state logic
   const hasUnseenSecret = gameState.flags['new_secret'] === true;
 
   return (
@@ -160,9 +155,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             setVolume={setVolume}
             zoom={zoom}
             setZoom={setZoom}
-            onSave={onSaveGame}
-            onReset={onResetSave}
-            lastSaved={lastSaved}
         />
       )}
 
@@ -175,7 +167,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         />
       )}
 
-      {/* Legacy Crafting for Workbenches until fully migrated or keep for simple things */}
       {(activeModal === 'WORKBENCH' || activeModal === 'CAMPFIRE') && (
         <CraftingModal 
             gameState={gameState} 
@@ -185,7 +176,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         />
       )}
 
-      {/* New Artisan Menu for Anvil, Furnace, Alchemy */}
       {(activeModal === 'ANVIL' || activeModal === 'ALCHEMY_TABLE' || activeModal === 'FURNACE') && (
           <ArtisanMenu 
               gameState={gameState}

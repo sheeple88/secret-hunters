@@ -38,14 +38,9 @@ export const generateHouseInterior = (
         destination: exitTo
     });
 
-    // Furniture based on owner type (rudimentary decoration)
-    // Bed
     entities.push({ id: `bed_${id}`, name: `${owner}'s Bed`, type: 'OBJECT', subType: 'BED', symbol: '=', color: 'red', pos: {x: 2, y: 2} });
-    
-    // Table/Chair logic (using existing types)
     entities.push({ id: `table_${id}`, name: 'Table', type: 'OBJECT', subType: 'CRATE', symbol: 'T', color: 'brown', pos: {x: 3, y: 4} });
 
-    // Chest (Random Loot)
     if (Math.random() > 0.5) {
         entities.push({ 
             id: `chest_${id}`, 

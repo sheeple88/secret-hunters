@@ -1,4 +1,5 @@
 
+
 export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 export type Position = {
@@ -103,8 +104,8 @@ export interface Secret {
   description: string;
   statBonus?: Partial<Stats>;
   perkId?: string;
-  cosmeticUnlock?: string; // New: Reward ID for visuals
-  titleReward?: string;    // New: Reward Title
+  cosmeticUnlock?: string; 
+  titleReward?: string;
   condition: (gameState: GameState) => boolean;
 }
 
@@ -129,7 +130,7 @@ export interface Entity {
   id: string;
   name: string;
   type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE' | 'ITEM_DROP';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT' | 'FOUNTAIN' | 'LAMP' | 'PLANT'; 
+  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'FURNACE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT' | 'FOUNTAIN' | 'LAMP' | 'PLANT'; 
   symbol: string;
   color: string;
   pos: Position;
@@ -169,6 +170,7 @@ export interface GameMap {
   difficulty: number;
   biome: string;
   isTown?: boolean;
+  source?: string; // New: Debug tracking for map source
 }
 
 export interface LogEntry {
@@ -197,7 +199,6 @@ export interface GameState {
   unlockedPerks: string[];
   equippedPerks: string[];
   
-  // NEW: Cosmetics & Titles
   unlockedCosmetics: string[];
   equippedCosmetic: string | null;
   activeTitle: string | null;
