@@ -2,30 +2,13 @@
 import { GameState, Position, AnimationType, LogEntry, Item, GameMap } from '../types';
 import { MAPS, ITEMS, uid, calculateSkillLevel, SCALE_FACTOR } from '../constants';
 import { playSound } from '../services/audioService';
-// NEW: Import modular AI
-import { processEnemyTurn, processSpawners } from './combat/enemyAI';
+import { processEnemyTurns, processSpawners } from './ai';
 import { generateDungeon } from './mapGenerator';
 import { checkQuestUpdate } from './questUtils';
+import { attemptGather } from '../services/gatheringService';
 
 const BLOCKED_TILES = ['WALL', 'TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE', 'ROCK', 'SHRINE', 'VOID', 'WATER', 'CACTUS', 'DEEP_WATER', 'OBSIDIAN', 'CRACKED_WALL', 'ROOF'];
 const TREE_TYPES = ['TREE', 'OAK_TREE', 'BIRCH_TREE', 'PINE_TREE'];
-
-// Skill XP Helper
-const applySkillXp = (gs: GameState, skillName: string, amount: number) => {
-    const skill = gs.skills[skillName as any] || { name: skillName, level: 1, xp: 0 };
-    const newXp = skill.xp + amount;
-    const newLevel = calculateSkillLevel(newXp);
-    const levelsGained = newLevel - skill.level;
-    
-    let statChanges: any = {};
-    if (levelsGained > 0) {
-        playSound('LEVEL_UP');
-        // Legacy stat bump kept for non-combat skills
-        if (skillName === 'Logging') statChanges.str = (gs.stats.str) + levelsGained;
-        if (skillName === 'Mining') statChanges.str = (gs.stats.str) + levelsGained;
-    }
-    return { updatedSkill: { ...skill, xp: newXp, level: newLevel }, statChanges, levelsGained };
-};
 
 const findBestEntry = (targetMap: GameMap, entrySide: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST'): Position => {
     let candidatePoints: Position[] = [];
@@ -124,12 +107,20 @@ export const handlePlayerMove = (
         // Block Check
         const entityAtPos = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
         
-        if (BLOCKED_TILES.includes(effectiveTile) && ![...TREE_TYPES, 'ROCK'].includes(effectiveTile)) {
-             return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
+        if (BLOCKED_TILES.includes(effectiveTile)) {
+             // NEW: Check if this is an interaction-based gather (bumping into it)
+             // Previously we gathered on bump. Now let's keep it bump to gather for simplicity/speed
+             // But use the NEW gathering service logic
+             
+             // Check if it's a gatherable resource
+             if (TREE_TYPES.includes(effectiveTile) || effectiveTile === 'ROCK' || effectiveTile === 'OBSIDIAN' || effectiveTile === 'STONE_BRICK' || effectiveTile === 'FLOWER') {
+                 // Prevent movement
+             } else {
+                 return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
+             }
         }
         
         if (entityAtPos && ['ENEMY', 'NPC', 'OBJECT'].includes(entityAtPos.type)) {
-             // Exception for Item Drops or non-blocking objects (like drops)
              if (!['ITEM_DROP'].includes(entityAtPos.type) && !['PRESSURE_PLATE'].includes(entityAtPos.subType || '')) {
                  return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
              }
@@ -146,10 +137,10 @@ export const handlePlayerMove = (
     let newStats = { ...prev.stats };
     let newSkills = { ...prev.skills };
     let newWorldMod = { ...prev.worldModified };
+    let newBestiary = [...prev.bestiary];
     let nextMapEntities = [...targetMap.entities];
     let newWorldTier = prev.worldTier || 0; 
     let newActiveQuest = prev.activeQuest;
-    let newBestiary = [...prev.bestiary]; // Fix: Added missing declaration
 
     if (didTransition) {
         const logMsg = `Zone: ${targetMap.name} (${nextPos.x}, ${nextPos.y})`;
@@ -210,50 +201,70 @@ export const handlePlayerMove = (
 
     // Check collision with tile (Gathering)
     if (!didTransition && BLOCKED_TILES.includes(targetTile)) {
-        if ((TREE_TYPES.includes(targetTile) || targetTile === 'ROCK')) {
-           playSound('GATHER');
-           const isTree = TREE_TYPES.includes(targetTile);
-           const skill = isTree ? 'Logging' : 'Mining';
-           const { updatedSkill, statChanges } = applySkillXp(prev, skill, 10);
-           
-           if (isTree) newCounters.trees_cut = (newCounters.trees_cut || 0) + 1;
-           if (targetTile === 'ROCK') newCounters.rocks_mined = (newCounters.rocks_mined || 0) + 1;
-           
-           newStats = { ...newStats, ...statChanges };
-           newSkills = { ...newSkills, [skill]: updatedSkill };
-           
-           // Add Item
-           let itemId = 'stone';
-           if (targetTile === 'OAK_TREE') itemId = 'oak_log';
-           else if (targetTile === 'BIRCH_TREE') itemId = 'birch_log';
-           else if (targetTile === 'PINE_TREE') itemId = 'pine_log';
-           else if (targetTile === 'TREE') itemId = 'wood';
-           
-           const itemTemplate = ITEMS[itemId];
-           const existing = newInventory.find(i => i.id === itemTemplate.id);
-           if (existing) {
-               newInventory = newInventory.map(i => i.id === itemTemplate.id ? { ...i, count: i.count + 1 } : i);
-           } else {
-               newInventory.push({ ...itemTemplate });
-           }
+        // Use new Gathering Service if applicable
+        const gatherResult = attemptGather(prev, targetTile, targetMap.difficulty);
+        
+        if (gatherResult.logs.length > 0) combatLogs.push(...gatherResult.logs);
 
-           const newMapMod = newWorldMod[nextMapId] || {};
-           newMapMod[`${nextPos.y},${nextPos.x}`] = isTree ? 'STUMP' : 'FLOOR';
-           newWorldMod[nextMapId] = newMapMod;
+        if (gatherResult.success && gatherResult.loot) {
+            const lootItem = ITEMS[gatherResult.loot];
+            if (lootItem) {
+                // Add Item
+                const existing = newInventory.find(i => i.id === lootItem.id);
+                if (existing) {
+                    newInventory = newInventory.map(i => i.id === lootItem.id ? { ...i, count: i.count + 1 } : i);
+                } else {
+                    newInventory.push({ ...lootItem });
+                }
 
-           const qUpd = checkQuestUpdate(newActiveQuest, 'COLLECT', itemId, 1);
-           if (qUpd) {
-               newActiveQuest = qUpd.newQuest;
-               if (qUpd.log) combatLogs.push(qUpd.log);
-           }
+                // Grant XP
+                const skillName = targetTile.includes('TREE') ? 'Logging' : targetTile === 'FLOWER' ? 'Herblore' : 'Mining';
+                const skill = newSkills[skillName as any];
+                const newXp = skill.xp + gatherResult.xp;
+                const newLvl = calculateSkillLevel(newXp);
+                
+                if (newLvl > skill.level) {
+                    playSound('LEVEL_UP');
+                    combatLogs.push({ id: uid(), message: `${skillName} leveled up to ${newLvl}!`, type: 'SKILL', timestamp: Date.now() });
+                }
+                newSkills[skillName as any] = { ...skill, xp: newXp, level: newLvl };
 
-           return { 
+                // Increment Counters
+                if (skillName === 'Logging') newCounters.trees_cut = (newCounters.trees_cut || 0) + 1;
+                if (skillName === 'Mining') newCounters.rocks_mined = (newCounters.rocks_mined || 0) + 1;
+
+                // Update Map (Deplete Node)
+                const newMapMod = newWorldMod[nextMapId] || {};
+                newMapMod[`${nextPos.y},${nextPos.x}`] = skillName === 'Logging' ? 'STUMP' : 'FLOOR';
+                newWorldMod[nextMapId] = newMapMod;
+
+                // Quest Update
+                const qUpd = checkQuestUpdate(newActiveQuest, 'COLLECT', gatherResult.loot, 1);
+                if (qUpd) {
+                    newActiveQuest = qUpd.newQuest;
+                    if (qUpd.log) combatLogs.push(qUpd.log);
+                }
+            }
+            return { 
                newState: { ...prev, playerFacing: facing, stats: newStats, skills: newSkills, inventory: newInventory, worldModified: newWorldMod, counters: newCounters, activeQuest: newActiveQuest, logs: [...combatLogs, ...prev.logs].slice(0,100) },
                damageEvents: {} 
-           };
-       }
+            };
+        } else if (gatherResult.logs.length > 0) {
+            // Failed gather or level too low - just return state with logs
+            return { 
+               newState: { ...prev, playerFacing: facing, logs: [...combatLogs, ...prev.logs].slice(0,100) },
+               damageEvents: {} 
+            };
+        }
+        
+        // If not gatherable or other block, return facing change
+        return { 
+            newState: { ...prev, playerFacing: facing, logs: [...combatLogs, ...prev.logs].slice(0,100) },
+            damageEvents: {} 
+        };
    }
 
+   // ... (Rest of existing movement logic for Items, Teleports, Crates stays exactly same) ...
    // Check Entity Collision (Pickups/Teleports only)
    let entity = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
 
@@ -346,11 +357,12 @@ export const handlePlayerMove = (
    // --- 4. Enemy Turns ---
    // Triggered by movement
    if (playerDidAction) {
-       // NEW: Modular AI Logic
-       nextMapEntities = processSpawners(targetMap, nextMapEntities);
+       // Process Spawners first (pass current steps)
+       nextMapEntities = processSpawners(nextMapEntities, targetMap, nextPos, newCounters.steps_taken || 0);
 
-       const { updatedEntities, damageToPlayer, logs: enemyLogs, animations: enemyAnims } 
-          = processEnemyTurn({ ...prev, playerPos: nextPos }, { ...targetMap, entities: nextMapEntities });
+       const aiMapState = { ...targetMap, entities: nextMapEntities };
+       const { entities: updatedEntities, damageToPlayer, logs: enemyLogs, anims: enemyAnims, numbers: enemyNumbers } 
+          = processEnemyTurns({ ...prev, playerPos: nextPos }, aiMapState, nextPos);
       
        nextMapEntities = updatedEntities;
        

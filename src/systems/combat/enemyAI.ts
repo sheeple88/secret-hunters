@@ -1,5 +1,5 @@
 
-import { Entity, GameState, Position, GameMap, Item } from '../../types';
+import { Entity, GameState, Position, GameMap, Item, AnimationType } from '../../types';
 import { getEnemyStats } from '../../data/combat/enemies';
 import { calculateHitChance } from './combatCore';
 import { hasLineOfSight } from '../ai'; // Reuse existing LOS
@@ -10,14 +10,14 @@ export interface TurnResult {
     updatedEntities: Entity[];
     damageToPlayer: number;
     logs: any[];
-    animations: Record<string, string>;
+    animations: Record<string, AnimationType>;
 }
 
 export const processEnemyTurn = (gameState: GameState, map: GameMap): TurnResult => {
     const { playerPos, stats: playerStats, equipment, skills, worldTier } = gameState;
     let damageToPlayer = 0;
     const logs: any[] = [];
-    const animations: Record<string, string> = {};
+    const animations: Record<string, AnimationType> = {};
     const updatedEntities = [...map.entities];
 
     // Player defence roll

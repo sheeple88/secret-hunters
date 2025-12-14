@@ -4,7 +4,6 @@ import { GameState, GameMap } from '../../types';
 import { Tile } from './Tile';
 import { EntityComponent } from './EntityComponent';
 import { hasLineOfSight } from '../../systems/ai';
-// NEW: Import Floating Damage for player
 import { FloatingDamage } from '../combat/FloatingDamage';
 
 interface GameRendererProps {
@@ -14,7 +13,7 @@ interface GameRendererProps {
   visionRadius: number;
   lightingOpacity: number;
   combatNumbers: Record<string, number>;
-  cameraPosition?: { x: number, y: number }; // Optional offset for mobile camera
+  cameraPosition?: { x: number, y: number };
 }
 
 export const GameRenderer: React.FC<GameRendererProps> = React.memo(({ 
@@ -27,12 +26,10 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
   cameraPosition
 }) => {
   
-  // Base map dimensions in pixels
   const TILE_SIZE = 32;
   const mapWidthPx = currentMap.width * TILE_SIZE;
   const mapHeightPx = currentMap.height * TILE_SIZE;
 
-  // Camera Transform Logic
   const transformStyle = cameraPosition ? {
       transform: `translate3d(${cameraPosition.x}px, ${cameraPosition.y}px, 0) scale(${viewScale})`,
       transformOrigin: 'top left',
@@ -48,6 +45,8 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
       willChange: 'transform'
   };
 
+  const isNight = gameState.time > 1800 || gameState.time < 600;
+
   return (
     <div 
       className="relative shadow-2xl bg-black border-4 border-stone-800 overflow-hidden box-content" 
@@ -60,27 +59,18 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
         {/* Tile Layer */}
         {currentMap.tiles.map((row, y) => row.map((tile, x) => {
             const isRevealed = gameState.exploration[gameState.currentMapId]?.[y]?.[x];
+            if (!isRevealed) return null;
             
-            // Fog of War: Render null to let the black container show through
-            if (!isRevealed) {
-                return null;
-            }
-            
-            // Apply World Mods (Chopped Trees, Mined Rocks)
             let displayTile = tile;
             if (gameState.worldModified[gameState.currentMapId] && gameState.worldModified[gameState.currentMapId][`${y},${x}`]) {
                 displayTile = gameState.worldModified[gameState.currentMapId][`${y},${x}`];
             }
 
-            // Visibility Check (Distance + LOS)
             const dx = Math.abs(x - gameState.playerPos.x);
             const dy = Math.abs(y - gameState.playerPos.y);
             let isVisible = dx <= visionRadius && dy <= visionRadius;
             
-            // Check LOS if within radius to cast shadows
-            if (isVisible) {
-                isVisible = hasLineOfSight(gameState.playerPos, {x, y}, currentMap);
-            }
+            if (isVisible) isVisible = hasLineOfSight(gameState.playerPos, {x, y}, currentMap);
 
             return (
                 <div 
@@ -89,10 +79,8 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
                     style={{ 
                         left: `${x * TILE_SIZE}px`, 
                         top: `${y * TILE_SIZE}px`,
-                        // Slight overlap to fix sub-pixel grid gaps between visible tiles
                         width: '32.5px', 
                         height: '32.5px',
-                        // FIX: Use filter instead of overlay to prevent stacking darkness on overlaps
                         filter: isVisible ? 'none' : 'brightness(0.35) grayscale(0.2)'
                     }}
                 >
@@ -109,28 +97,22 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
             const dx = Math.abs(entity.pos.x - gameState.playerPos.x);
             const dy = Math.abs(entity.pos.y - gameState.playerPos.y);
             let isVisible = dx <= visionRadius && dy <= visionRadius;
-            
-            // Check LOS for entities too
-            if (isVisible) {
-                isVisible = hasLineOfSight(gameState.playerPos, entity.pos, currentMap);
-            }
+            if (isVisible) isVisible = hasLineOfSight(gameState.playerPos, entity.pos, currentMap);
 
-            // Hide Enemies & NPCs if not directly in vision range, even if mapped
             if ((entity.type === 'ENEMY' || entity.type === 'NPC') && !isVisible) return null;
 
             return (
-              <div 
-                key={entity.id} 
-                style={{
-                    // Use uniform filter for entities in fog to match terrain
-                    filter: isVisible ? 'none' : 'brightness(0.35) grayscale(0.2)'
-                }}
-              >
+              <div key={entity.id} style={{ filter: isVisible ? 'none' : 'brightness(0.35) grayscale(0.2)' }}>
                   <EntityComponent 
                       entity={entity} 
                       animation={gameState.animations[entity.id]}
                       damageValue={combatNumbers[entity.id]}
                   />
+                  {entity.subType === 'LAMP' && isNight && (
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-yellow-500/20 rounded-full blur-xl pointer-events-none mix-blend-screen z-20" 
+                           style={{ transform: `translate3d(${entity.pos.x * 32}px, ${entity.pos.y * 32}px, 0)` }} 
+                      />
+                  )}
               </div>
             );
         })}
@@ -150,9 +132,10 @@ export const GameRenderer: React.FC<GameRendererProps> = React.memo(({
             weaponType={gameState.equipment.WEAPON?.weaponStats?.type}
             animation={gameState.animations['player']}
             damageValue={combatNumbers['player']}
+            equippedCosmetic={gameState.equippedCosmetic}
         />
 
-        {/* Floating Combat Text for Player specifically if not handled by EntityComponent above */}
+        {/* Floating Combat Text for Player */}
         {gameState.animations['player'] === 'HURT' && combatNumbers['player'] && (
              <div className="absolute transition-transform will-change-transform z-50 pointer-events-none" style={{ transform: `translate3d(${gameState.playerPos.x * 32}px, ${gameState.playerPos.y * 32}px, 0)` }}>
                  <FloatingDamage value={combatNumbers['player']} type="HIT" />
