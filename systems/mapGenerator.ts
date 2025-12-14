@@ -1,4 +1,5 @@
 
+
 import { GameMap, TileType, Entity, Secret } from '../types';
 import { uid } from './mapUtils';
 import { generateHavensRest } from './maps/havensRest';
@@ -10,8 +11,10 @@ const TOWN_NAMES_SUFFIX = ["haven", "shire", "grad", "wood", "field", "port", "f
 const MONSTER_PREFIXES = ["Angry", "Rabid", "Ancient", "Dark", "Cursed", "Giant", "Tiny", "Mutant", "Void", "Spectral", "Armored", "Savage", "Elite", "King", "Queen", "Lord", "Omega", "Alpha", "Primal", "Chaos"];
 const MONSTER_BASES = ["Slime", "Rat", "Bat", "Wolf", "Bear", "Spider", "Snake", "Scorpion", "Goblin", "Skeleton", "Zombie", "Ghost", "Knight", "Mage", "Golem", "Drake", "Dragon", "Demon", "Beholder", "Lich", "Mimic", "Vampire", "Kraken", "Minotaur", "Specter"];
 
-export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
-    const maps: Record<string, GameMap> = {};
+// Helper to clear and rebuild the maps object in place
+export const regenerateAllMaps = (maps: Record<string, GameMap>, secrets: Secret[]) => {
+    // Clear existing keys to ensure fresh generation
+    Object.keys(maps).forEach(key => delete maps[key]);
     
     // Generate Haven's Rest (Town)
     generateHavensRest(maps);
@@ -56,7 +59,16 @@ export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
             if (x < 19) map.neighbors.RIGHT = `map_${x+1}_${y}`;
         }
     }
+};
 
+// New function to initialize the mutable MAPS object
+export const initializeWorld = (maps: Record<string, GameMap>, secrets: Secret[]) => {
+    regenerateAllMaps(maps, secrets);
+};
+
+export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
+    const maps: Record<string, GameMap> = {};
+    regenerateAllMaps(maps, secrets);
     return maps;
 };
 

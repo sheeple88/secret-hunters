@@ -1,10 +1,8 @@
-import { Entity, GameState, Position, GameMap, Item, AnimationType } from '../../types';
-import { getEnemyStats } from '../../data/combat/enemies';
-import { calculateHitChance } from './combatCore';
-import { hasLineOfSight } from '../ai'; 
-import { uid } from '../../constants';
 
-// Simple types for the result
+import { Entity, GameState, GameMap, AnimationType, Item } from '../../types';
+import { MONSTER_TEMPLATES, SCALE_FACTOR, uid } from '../../constants';
+import { hasLineOfSight } from '../ai'; 
+
 export interface TurnResult {
     updatedEntities: Entity[];
     damageToPlayer: number;
@@ -21,16 +19,14 @@ export const processEnemyTurn = (gameState: GameState, map: GameMap): TurnResult
     const numbers: Record<string, number> = {};
     const updatedEntities = [...map.entities];
 
-    // Player defence roll
+    // Player defence
     const defLvl = skills['Defence']?.level || 1;
-    
     const equipmentItems = Object.values(equipment) as (Item | null)[];
     const armorBonus = equipmentItems.reduce((acc: number, item: Item | null) => {
         if (!item || !item.stats || typeof item.stats.hp !== 'number') return acc;
         return acc + Math.floor(item.stats.hp / 5);
     }, 0);
 
-    // Occupied tiles map
     const occupied = new Set<string>();
     occupied.add(`${playerPos.x},${playerPos.y}`);
     updatedEntities.forEach(e => occupied.add(`${e.pos.x},${e.pos.y}`));
@@ -40,26 +36,31 @@ export const processEnemyTurn = (gameState: GameState, map: GameMap): TurnResult
         if (ent.type !== 'ENEMY') continue;
 
         const dist = Math.abs(ent.pos.x - playerPos.x) + Math.abs(ent.pos.y - playerPos.y);
-        const enemyStats = getEnemyStats(ent.name, ent.level || 1, worldTier);
         const aggro = ent.aggroRange || 6;
 
-        // Remove self from occupied to allow move
         occupied.delete(`${ent.pos.x},${ent.pos.y}`);
 
-        // 1. Attack if adjacent
+        // Attack
         if (dist === 1) {
-            const hitChance = calculateHitChance(enemyStats.accuracy / 2, 0, defLvl, armorBonus);
+            // Simplified hit chance
+            const hitChance = 0.5 + (ent.level || 1) * 0.02;
             const isHit = Math.random() < hitChance;
             let dmg = 0;
             
             animations[ent.id] = 'ATTACK';
 
             if (isHit) {
-                // Scale enemy max hit by 4x to match the 100 HP baseline of the player
-                const rawMaxHit = enemyStats.maxHit * 4;
-                dmg = Math.floor(Math.random() * (rawMaxHit + 1));
+                // Find Template
+                let baseName = ent.name.split(' ').pop() || 'Slime';
+                const template = MONSTER_TEMPLATES[baseName] || MONSTER_TEMPLATES['Slime'];
+                const baseDmg = Math.max(1, Math.floor(template.baseDmg * Math.pow(SCALE_FACTOR, ent.level || 1)));
                 
-                if (gameState.equippedPerks.includes('iron_skin')) dmg = Math.max(0, dmg - 2); 
+                dmg = Math.floor(Math.random() * baseDmg) + 1;
+                
+                // Armor Mitigation
+                dmg = Math.max(0, dmg - Math.floor(armorBonus / 10));
+
+                if (gameState.equippedPerks.includes('iron_skin')) dmg = Math.max(0, dmg - 1); 
                 
                 if (dmg > 0) {
                     damageToPlayer += dmg;
@@ -72,48 +73,33 @@ export const processEnemyTurn = (gameState: GameState, map: GameMap): TurnResult
             } else {
                 animations['player'] = 'DODGE';
             }
-            // Turn used attacking
             occupied.add(`${ent.pos.x},${ent.pos.y}`);
             continue;
         }
 
-        // 2. Chase if in range and LOS
+        // Chase
         if (dist <= aggro && hasLineOfSight(ent.pos, playerPos, map)) {
             let dx = playerPos.x - ent.pos.x;
             let dy = playerPos.y - ent.pos.y;
             let targetX = ent.pos.x + (dx !== 0 ? Math.sign(dx) : 0);
             let targetY = ent.pos.y + (dy !== 0 ? Math.sign(dy) : 0);
 
-            // Simple Axis Check (Try X, then Y)
             let moved = false;
+            // Try X
             if (Math.abs(dx) > Math.abs(dy)) {
                 if (!occupied.has(`${targetX},${ent.pos.y}`) && !isBlocked(targetX, ent.pos.y, map)) {
                     ent.pos.x = targetX;
                     moved = true;
                 }
             }
-            
+            // Try Y
             if (!moved) {
-                // Try Y
                 targetY = ent.pos.y + (dy !== 0 ? Math.sign(dy) : 0);
                 if (!occupied.has(`${ent.pos.x},${targetY}`) && !isBlocked(ent.pos.x, targetY, map)) {
                     ent.pos.y = targetY;
                     moved = true;
                 }
             }
-        }
-        // 3. Roam randomly
-        else {
-             if (Math.random() < 0.2) {
-                 const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-                 const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
-                 const nx = ent.pos.x + dx;
-                 const ny = ent.pos.y + dy;
-                 if (!occupied.has(`${nx},${ny}`) && !isBlocked(nx, ny, map)) {
-                     ent.pos.x = nx;
-                     ent.pos.y = ny;
-                 }
-             }
         }
 
         occupied.add(`${ent.pos.x},${ent.pos.y}`);

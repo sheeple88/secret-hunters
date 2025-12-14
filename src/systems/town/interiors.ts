@@ -62,7 +62,6 @@ export const generateHouseInterior = (
         tiles, 
         entities, 
         neighbors: {}, 
-        exits: [], 
         difficulty: 0, 
         biome: 'INTERIOR', 
         isTown: false 

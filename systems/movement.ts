@@ -1,4 +1,5 @@
 
+
 import { GameState, Position, AnimationType, LogEntry, Item, GameMap } from '../types';
 import { MAPS, ITEMS, uid, calculateSkillLevel, SCALE_FACTOR } from '../constants';
 import { playSound } from '../services/audioService';
@@ -73,8 +74,8 @@ export const handlePlayerMove = (
     dx: number, 
     dy: number,
     setActiveModal: (m: string) => void
-): GameState => {
-    if (prev.stats.hp <= 0) return prev;
+): { newState: GameState, damageEvents: Record<string, number> } => {
+    if (prev.stats.hp <= 0) return { newState: prev, damageEvents: {} };
     
     const map = MAPS[prev.currentMapId];
     const nx = prev.playerPos.x + dx;
@@ -101,7 +102,7 @@ export const handlePlayerMove = (
             nextPos = findBestEntry(MAPS[targetId], entrySide);
             didTransition = true;
         } else {
-            return { ...prev, playerFacing: facing };
+            return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
         }
     }
     
@@ -110,7 +111,7 @@ export const handlePlayerMove = (
     // --- 2. Collision Check (If on same map) ---
     if (!didTransition) {
         if (!targetMap.tiles[nextPos.y] || !targetMap.tiles[nextPos.y][nextPos.x]) {
-             return { ...prev, playerFacing: facing };
+             return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
         }
         
         // Resolve Effective Tile
@@ -125,13 +126,13 @@ export const handlePlayerMove = (
         const entityAtPos = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
         
         if (BLOCKED_TILES.includes(effectiveTile) && ![...TREE_TYPES, 'ROCK'].includes(effectiveTile)) {
-             return { ...prev, playerFacing: facing };
+             return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
         }
         
         if (entityAtPos && ['ENEMY', 'NPC', 'OBJECT'].includes(entityAtPos.type)) {
              // Exception for Item Drops or non-blocking objects (like drops)
              if (!['ITEM_DROP'].includes(entityAtPos.type) && !['PRESSURE_PLATE'].includes(entityAtPos.subType || '')) {
-                 return { ...prev, playerFacing: facing };
+                 return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
              }
         }
     }
@@ -140,6 +141,7 @@ export const handlePlayerMove = (
     let playerDidAction = false;
     let newAnimations: Record<string, AnimationType> = {};
     let newNumbers: Record<string, number> = {};
+    let damageEvents: Record<string, number> = {};
     let combatLogs: LogEntry[] = [];
     let newCounters = { ...prev.counters };
     let newInventory = [...prev.inventory];
@@ -196,12 +198,15 @@ export const handlePlayerMove = (
         }
 
         return { 
-            ...prev, 
-            playerPos: nextPos, 
-            currentMapId: nextMapId, 
-            exploration: newExp, 
-            playerFacing: 'DOWN',
-            logs: [...combatLogs, ...prev.logs].slice(0,100)
+            newState: { 
+                ...prev, 
+                playerPos: nextPos, 
+                currentMapId: nextMapId, 
+                exploration: newExp, 
+                playerFacing: 'DOWN',
+                logs: [...combatLogs, ...prev.logs].slice(0,100)
+            },
+            damageEvents: {}
         };
     }
 
@@ -244,7 +249,20 @@ export const handlePlayerMove = (
                if (qUpd.log) combatLogs.push(qUpd.log);
            }
 
-           return { ...prev, playerFacing: facing, stats: newStats, skills: newSkills, inventory: newInventory, worldModified: newWorldMod, counters: newCounters, activeQuest: newActiveQuest, logs: [...combatLogs, ...prev.logs].slice(0,100) };
+           return { 
+               newState: { 
+                   ...prev, 
+                   playerFacing: facing, 
+                   stats: newStats, 
+                   skills: newSkills, 
+                   inventory: newInventory, 
+                   worldModified: newWorldMod, 
+                   counters: newCounters, 
+                   activeQuest: newActiveQuest, 
+                   logs: [...combatLogs, ...prev.logs].slice(0,100) 
+               },
+               damageEvents: {}
+           };
        }
    }
 
@@ -300,12 +318,15 @@ export const handlePlayerMove = (
            const allLogs = [...combatLogs, ...prev.logs].slice(0, 100);
 
            return { 
-               ...prev, 
-               playerPos: { x: dest.x, y: dest.y }, 
-               currentMapId: dest.mapId, 
-               exploration: newExp, 
-               playerFacing: 'DOWN',
-               logs: allLogs
+               newState: { 
+                   ...prev, 
+                   playerPos: { x: dest.x, y: dest.y }, 
+                   currentMapId: dest.mapId, 
+                   exploration: newExp, 
+                   playerFacing: 'DOWN',
+                   logs: allLogs
+               },
+               damageEvents: {}
            };
        }
        
@@ -322,7 +343,7 @@ export const handlePlayerMove = (
            playerDidAction = true;
            nextPos = prev.playerPos; // Stay put
        } else if (['NPC', 'OBJECT', 'ENEMY'].includes(entity.type) && !['PRESSURE_PLATE'].includes(entity.subType || '')) {
-           return { ...prev, playerFacing: facing };
+           return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
        }
    } else {
        // Move Success
@@ -349,7 +370,7 @@ export const handlePlayerMove = (
        if (damageToPlayer > 0) {
            newStats.hp -= damageToPlayer;
            newCounters.damage_taken = (newCounters.damage_taken || 0) + damageToPlayer;
-           newNumbers['player'] = (newNumbers['player'] || 0) + damageToPlayer;
+           damageEvents['player'] = damageToPlayer;
            combatLogs = [...combatLogs, ...enemyLogs];
            newAnimations = { ...newAnimations, ...enemyAnims };
            if (newStats.hp <= 0) setActiveModal('DEATH');
@@ -385,20 +406,23 @@ export const handlePlayerMove = (
    MAPS[nextMapId].entities = nextMapEntities;
 
    return {
-       ...prev,
-       playerPos: nextPos,
-       playerFacing: facing,
-       currentMapId: nextMapId,
-       stats: newStats,
-       inventory: newInventory,
-       skills: newSkills,
-       bestiary: newBestiary,
-       logs: finalLogs,
-       animations: newAnimations,
-       exploration: newExp,
-       counters: newCounters,
-       activeQuest: newActiveQuest,
-       worldTier: newWorldTier,
-       lastAction: playerDidAction ? 'MOVE' : prev.lastAction // Track action type
+       newState: {
+           ...prev,
+           playerPos: nextPos,
+           playerFacing: facing,
+           currentMapId: nextMapId,
+           stats: newStats,
+           inventory: newInventory,
+           skills: newSkills,
+           bestiary: newBestiary,
+           logs: finalLogs,
+           animations: newAnimations,
+           exploration: newExp,
+           counters: newCounters,
+           activeQuest: newActiveQuest,
+           worldTier: newWorldTier,
+           lastAction: playerDidAction ? 'MOVE' : prev.lastAction
+       },
+       damageEvents
    };
 };

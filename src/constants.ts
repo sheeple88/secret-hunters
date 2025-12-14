@@ -1,11 +1,7 @@
 
-import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType, DamageType, Secret } from './types';
+import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, DamageType, Secret, MonsterStats } from './types';
 import { ASSETS } from './assets';
 import { uid } from './systems/mapUtils';
-import { TOWN_SECRETS } from './data/town/townSecrets';
-import { COMBAT_SECRETS } from './data/secrets/combat';
-import { WORLD_SECRETS } from './data/secrets/world';
-import { INTERACTION_SECRETS } from './data/secrets/interaction';
 
 export { uid };
 export { ASSETS };
@@ -58,7 +54,7 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Crafting: { name: 'Crafting', level: 1, xp: 0 },
   Fletching: { name: 'Fletching', level: 1, xp: 0 },
   Carving: { name: 'Carving', level: 1, xp: 0 },
-  Alchemy: { name: 'Alchemy', level: 1, xp: 0 }, // Legacy magic skill, kept for saves
+  Alchemy: { name: 'Alchemy', level: 1, xp: 0 },
   Fishing: { name: 'Fishing', level: 1, xp: 0 },
   Cooking: { name: 'Cooking', level: 1, xp: 0 },
 };
@@ -107,7 +103,6 @@ export const ITEM_SUFFIXES = [
     { name: 'of Focus', stat: 'int' },
 ];
 
-// UPDATED WEAPON TEMPLATES WITH COMBAT STYLES
 export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
     'Sword': { type: 'SWORD', damageType: 'SLASH', power: 10, accuracy: 10, critChance: 0.05, critMult: 1.5, range: 1 },
     'Claymore': { type: 'SWORD', damageType: 'SLASH', power: 18, accuracy: 8, critChance: 0.05, critMult: 1.8, range: 1 },
@@ -123,14 +118,6 @@ export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
     'Wand': { type: 'STAFF', damageType: 'MAGIC', power: 10, accuracy: 12, critChance: 0.1, critMult: 1.5, range: 4 },
     'Rod': { type: 'ROD', damageType: 'CRUSH', power: 5, accuracy: 5, critChance: 0.01, critMult: 1.2, range: 3 },
 };
-
-export interface MonsterStats {
-    baseHp: number;
-    baseDmg: number;
-    defence: number;
-    weakness?: DamageType;
-    xpMod: number; // Multiplier for XP reward
-}
 
 // Updated Monster Templates with Weaknesses
 export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
@@ -324,13 +311,5 @@ export const PERKS: Record<string, Perk> = {
     'master_looter': { id: 'master_looter', name: 'Master Looter', description: 'Better drops.', icon: '💎', statBonus: { dex: 3 } },
 };
 
-// Update ALL_SECRETS dynamically to include new ones
-export const ALL_SECRETS: Secret[] = [
-    ...COMBAT_SECRETS,
-    ...WORLD_SECRETS,
-    ...INTERACTION_SECRETS,
-    ...TOWN_SECRETS
-];
-
-// Initialize as empty to break circular dependency. App.tsx will fill this.
+// INITIALIZE EMPTY MAPS CONTAINER
 export const MAPS: Record<string, GameMap> = {};

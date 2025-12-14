@@ -1,8 +1,8 @@
-import { GameState, Entity, SkillName } from '../../types';
-import { MAPS, calculateSkillLevel, SCALE_FACTOR, uid } from '../../constants';
-import { resolvePlayerAttack } from '../../services/combatService';
-import { generateLoot } from '../../services/itemService';
+
+import { GameState, Entity } from '../../types';
+import { MAPS, calculateSkillLevel, SCALE_FACTOR, uid, MONSTER_TEMPLATES, WEAPON_TEMPLATES } from '../../constants';
 import { playSound } from '../../services/audioService';
+import { generateLoot } from '../../services/itemService';
 
 // Helper to add inventory
 const addToInv = (item: any, inventory: any[]) => {
@@ -45,15 +45,32 @@ export const handlePlayerAttack = (gameState: GameState): { newState: GameState,
         return { newState: gameState, damageEvents };
     }
 
-    // 3. Resolve Combat
-    const result = resolvePlayerAttack(gameState, target);
+    // 3. Resolve Combat (Simplified Inline for robustness)
+    const weapon = gameState.equipment.WEAPON?.weaponStats || WEAPON_TEMPLATES['Sword'];
+    const strengthLvl = gameState.skills.Strength.level;
+    const attackLvl = gameState.skills.Attack.level;
     
-    playSound(result.isHit ? 'HIT' : 'ATTACK');
-    if (result.isHit) {
-        damageEvents[target.id] = result.damage;
+    // Simple Hit Calc
+    const hitChance = 0.7 + (attackLvl * 0.01);
+    const isHit = Math.random() < hitChance;
+    let damage = 0;
+
+    if (isHit) {
+        // Max Hit = (Str / 10) + WeaponPower
+        const maxHit = Math.max(1, Math.floor(strengthLvl / 5) + weapon.power);
+        damage = Math.floor(Math.random() * maxHit) + 1;
+        
+        if (Math.random() < weapon.critChance) {
+            damage = Math.floor(damage * weapon.critMult);
+        }
+    }
+
+    playSound(isHit ? 'HIT' : 'ATTACK');
+    if (isHit) {
+        damageEvents[target.id] = damage;
     }
     
-    let newLogs = [...gameState.logs, ...result.logs];
+    let newLogs = [...gameState.logs];
     let newSkills = { ...gameState.skills };
     let newStats = { ...gameState.stats };
     let newCounters = { ...gameState.counters };
@@ -61,33 +78,37 @@ export const handlePlayerAttack = (gameState: GameState): { newState: GameState,
     let newEntities = [...map.entities];
     let newBestiary = [...gameState.bestiary];
 
+    if (isHit) {
+        newLogs.push({ id: uid(), message: `Hit ${target.name} for ${damage}`, type: 'COMBAT', timestamp: Date.now() });
+    } else {
+        newLogs.push({ id: uid(), message: `Missed ${target.name}`, type: 'COMBAT', timestamp: Date.now() });
+    }
+
     // Apply XP
-    result.xpGained.forEach(xp => {
-        if (!newSkills[xp.skill]) newSkills[xp.skill] = { name: xp.skill, level: 1, xp: 0 };
-        const skill = newSkills[xp.skill];
-        const newXpVal = skill.xp + xp.amount;
+    const xpAmount = damage * 2;
+    ['Strength', 'Attack', 'Constitution'].forEach(skillName => {
+        const skill = newSkills[skillName as any];
+        const newXpVal = skill.xp + Math.floor(xpAmount/3);
         const newLvl = calculateSkillLevel(newXpVal);
         
         if (newLvl > skill.level) {
             playSound('LEVEL_UP');
-            newLogs.push({ id: uid(), message: `${xp.skill} leveled up to ${newLvl}!`, type: 'SKILL', timestamp: Date.now() });
+            newLogs.push({ id: uid(), message: `${skillName} leveled up to ${newLvl}!`, type: 'SKILL', timestamp: Date.now() });
             
-            // Const HP Gain
-            if (xp.skill === 'Constitution') {
+            if (skillName === 'Constitution') {
                 const bonus = Math.floor(10 * Math.pow(SCALE_FACTOR, newLvl));
                 newStats.maxHp += bonus;
                 newStats.hp += bonus;
             }
         }
-        newSkills[xp.skill] = { ...skill, xp: newXpVal, level: newLvl };
+        newSkills[skillName as any] = { ...skill, xp: newXpVal, level: newLvl };
     });
 
     // Apply Damage
-    const newTargetHp = (target.hp || 0) - result.damage;
+    const newTargetHp = (target.hp || 0) - damage;
     
-    // Counter Stats
-    if (result.damage > (newCounters['max_hit_dealt'] || 0)) {
-        newCounters['max_hit_dealt'] = result.damage;
+    if (damage > (newCounters['max_hit_dealt'] || 0)) {
+        newCounters['max_hit_dealt'] = damage;
     }
 
     if (newTargetHp <= 0) {

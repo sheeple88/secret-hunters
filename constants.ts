@@ -1,9 +1,7 @@
 
-import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType, DamageType } from './types';
+import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType, DamageType, Secret } from './types';
 import { ASSETS } from './assets';
-import { createWorld } from './systems/mapGenerator';
 import { uid } from './systems/mapUtils';
-import { ALL_SECRETS } from './data/secrets/index';
 
 export { uid };
 export { ASSETS };
@@ -22,19 +20,17 @@ export const formatNumber = (num: number): string => {
 };
 
 // --- EXPONENTIAL SCALING FORMULAS ---
-// Base growth factor: 1.15 (Doubles roughly every 5 levels)
 export const SCALE_FACTOR = 1.15;
 
 export const calculateXpForLevel = (level: number) => Math.floor(100 * Math.pow(SCALE_FACTOR, level));
-// Inverse formula for skills to keep them somewhat aligned but slightly easier
 export const calculateSkillLevel = (xp: number) => Math.max(1, Math.floor(Math.log(Math.max(xp, 10) / 10) / Math.log(1.12)) + 1);
 
 export const INITIAL_STATS: Stats = {
-  str: 5, // Now mostly for carrying cap / interaction requirements? Or minimal dmg?
+  str: 5,
   dex: 5,
   int: 5,
   regeneration: 1,
-  hp: 100, // Higher base HP for combat balance
+  hp: 100,
   maxHp: 100,
   xp: 0,
   level: 1,
@@ -46,11 +42,13 @@ export const INITIAL_SKILLS: Record<SkillName, Skill> = {
   Attack: { name: 'Attack', level: 1, xp: 0 },
   Strength: { name: 'Strength', level: 1, xp: 0 },
   Defence: { name: 'Defence', level: 1, xp: 0 },
-  Constitution: { name: 'Constitution', level: 10, xp: 1100 }, // Start with some HP
-  Dexterity: { name: 'Dexterity', level: 1, xp: 0 }, // For Ranged
+  Constitution: { name: 'Constitution', level: 10, xp: 1100 },
+  Dexterity: { name: 'Dexterity', level: 1, xp: 0 },
   Agility: { name: 'Agility', level: 1, xp: 0 },
   Logging: { name: 'Logging', level: 1, xp: 0 },
   Mining: { name: 'Mining', level: 1, xp: 0 },
+  Smithing: { name: 'Smithing', level: 1, xp: 0 },
+  Herblore: { name: 'Herblore', level: 1, xp: 0 },
   Crafting: { name: 'Crafting', level: 1, xp: 0 },
   Fletching: { name: 'Fletching', level: 1, xp: 0 },
   Carving: { name: 'Carving', level: 1, xp: 0 },
@@ -65,7 +63,9 @@ export const DEFAULT_RECIPES = [
     'fishing_rod',
     'iron_ingot',
     'campfire_kit',
-    'cooked_fish'
+    'cooked_fish',
+    'bar_bronze',
+    'bronze_dagger'
 ];
 
 export const EQUIPMENT_TYPES: Record<string, { names: string[], statBias: string[] }> = {
@@ -101,7 +101,6 @@ export const ITEM_SUFFIXES = [
     { name: 'of Focus', stat: 'int' },
 ];
 
-// UPDATED WEAPON TEMPLATES WITH COMBAT STYLES
 export const WEAPON_TEMPLATES: Record<string, WeaponStats> = {
     'Sword': { type: 'SWORD', damageType: 'SLASH', power: 10, accuracy: 10, critChance: 0.05, critMult: 1.5, range: 1 },
     'Claymore': { type: 'SWORD', damageType: 'SLASH', power: 18, accuracy: 8, critChance: 0.05, critMult: 1.8, range: 1 },
@@ -123,10 +122,9 @@ export interface MonsterStats {
     baseDmg: number;
     defence: number;
     weakness?: DamageType;
-    xpMod: number; // Multiplier for XP reward
+    xpMod: number; 
 }
 
-// Updated Monster Templates with Weaknesses
 export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
     // Critters
     'Slime': { baseHp: 15, baseDmg: 2, defence: 2, weakness: 'SLASH', xpMod: 0.8 },
@@ -135,6 +133,7 @@ export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
     'Snake': { baseHp: 12, baseDmg: 4, defence: 3, weakness: 'SLASH', xpMod: 1.0 },
     'Spider': { baseHp: 15, baseDmg: 3, defence: 3, weakness: 'CRUSH', xpMod: 1.0 },
     'Scorpion': { baseHp: 18, baseDmg: 5, defence: 8, weakness: 'CRUSH', xpMod: 1.2 },
+    'Chicken': { baseHp: 5, baseDmg: 0, defence: 0, weakness: 'SLASH', xpMod: 0 },
     
     // Humanoids / Mid-tier
     'Goblin': { baseHp: 25, baseDmg: 4, defence: 5, weakness: 'SLASH', xpMod: 1.2 },
@@ -173,55 +172,85 @@ export const MONSTER_TEMPLATES: Record<string, MonsterStats> = {
 
 export const ITEMS: Record<string, Item> = {
     'wood': { id: 'wood', name: 'Wood', type: 'MATERIAL', description: 'Used for crafting.', count: 1, value: 1 },
-    'oak_log': { id: 'oak_log', name: 'Oak Log', type: 'MATERIAL', description: 'Sturdy oak wood.', count: 1, value: 2 },
-    'birch_log': { id: 'birch_log', name: 'Birch Log', type: 'MATERIAL', description: 'Pale birch wood.', count: 1, value: 2 },
-    'pine_log': { id: 'pine_log', name: 'Pine Log', type: 'MATERIAL', description: 'Sticky pine wood.', count: 1, value: 3 },
-    
     'stone': { id: 'stone', name: 'Stone', type: 'MATERIAL', description: 'Used for crafting.', count: 1, value: 1 },
+    'leather': { id: 'leather', name: 'Leather', type: 'MATERIAL', description: 'Cured hide.', count: 1, value: 5 },
+    
+    'oak_log': { id: 'oak_log', name: 'Oak Log', type: 'MATERIAL', description: 'Sturdy oak wood.', count: 1, value: 2 },
+    'willow_log': { id: 'willow_log', name: 'Willow Log', type: 'MATERIAL', description: 'Soft wood for fletching.', count: 1, value: 5 },
+    'maple_log': { id: 'maple_log', name: 'Maple Log', type: 'MATERIAL', description: 'Excellent for bows.', count: 1, value: 10 },
+    'yew_log': { id: 'yew_log', name: 'Yew Log', type: 'MATERIAL', description: 'Strong and flexible.', count: 1, value: 25 },
+    'magic_log': { id: 'magic_log', name: 'Magic Log', type: 'MATERIAL', description: 'Pulsing with energy.', count: 1, value: 50, rarity: 'RARE' },
+    
+    'copper_ore': { id: 'copper_ore', name: 'Copper Ore', type: 'MATERIAL', description: 'Soft orange metal.', count: 1, value: 2 },
+    'tin_ore': { id: 'tin_ore', name: 'Tin Ore', type: 'MATERIAL', description: 'Used with copper for bronze.', count: 1, value: 2 },
     'iron_ore': { id: 'iron_ore', name: 'Iron Ore', type: 'MATERIAL', description: 'Can be smelted.', count: 1, value: 5 },
+    'coal_ore': { id: 'coal_ore', name: 'Coal', type: 'MATERIAL', description: 'Fuel for smelting steel.', count: 1, value: 10 },
     'gold_ore': { id: 'gold_ore', name: 'Gold Ore', type: 'MATERIAL', description: 'Sparkly.', count: 1, value: 20 },
-    'diamond': { id: 'diamond', name: 'Diamond', type: 'MATERIAL', description: 'Very hard.', count: 1, value: 100 },
+    'mithril_ore': { id: 'mithril_ore', name: 'Mithril Ore', type: 'MATERIAL', description: 'Lightweight and strong.', count: 1, value: 40 },
+    'adamant_ore': { id: 'adamant_ore', name: 'Adamant Ore', type: 'MATERIAL', description: 'Extremely hard metal.', count: 1, value: 80 },
+    'rune_ore': { id: 'rune_ore', name: 'Runite Ore', type: 'MATERIAL', description: 'The strongest metal.', count: 1, value: 200, rarity: 'RARE' },
+
+    'bronze_bar': { id: 'bronze_bar', name: 'Bronze Bar', type: 'MATERIAL', description: 'Alloy of copper and tin.', count: 1, value: 5 },
+    'iron_bar': { id: 'iron_bar', name: 'Iron Bar', type: 'MATERIAL', description: 'Refined iron.', count: 1, value: 15 },
+    'steel_bar': { id: 'steel_bar', name: 'Steel Bar', type: 'MATERIAL', description: 'Iron strengthened with coal.', count: 1, value: 30 },
+    'gold_bar': { id: 'gold_bar', name: 'Gold Bar', type: 'MATERIAL', description: 'Shiny bullion.', count: 1, value: 50 },
+    'mithril_bar': { id: 'mithril_bar', name: 'Mithril Bar', type: 'MATERIAL', description: 'Silvery metal.', count: 1, value: 100 },
+    'adamant_bar': { id: 'adamant_bar', name: 'Adamant Bar', type: 'MATERIAL', description: 'Greenish metal.', count: 1, value: 200 },
+    'rune_bar': { id: 'rune_bar', name: 'Rune Bar', type: 'MATERIAL', description: 'Blue metal of legends.', count: 1, value: 500 },
+
+    'grimy_guam': { id: 'grimy_guam', name: 'Grimy Guam', type: 'MATERIAL', description: 'Needs cleaning.', count: 1, value: 2 },
+    'clean_guam': { id: 'clean_guam', name: 'Clean Guam', type: 'MATERIAL', description: 'Basic herb.', count: 1, value: 3 },
+    'grimy_marrentill': { id: 'grimy_marrentill', name: 'Grimy Marrentill', type: 'MATERIAL', description: 'Needs cleaning.', count: 1, value: 5 },
+    'clean_marrentill': { id: 'clean_marrentill', name: 'Clean Marrentill', type: 'MATERIAL', description: 'Bitter herb.', count: 1, value: 6 },
+    'grimy_tarromin': { id: 'grimy_tarromin', name: 'Grimy Tarromin', type: 'MATERIAL', description: 'Needs cleaning.', count: 1, value: 10 },
+    'clean_tarromin': { id: 'clean_tarromin', name: 'Clean Tarromin', type: 'MATERIAL', description: 'Potent herb.', count: 1, value: 12 },
+    
+    'vial_water': { id: 'vial_water', name: 'Vial of Water', type: 'MATERIAL', description: 'Base for potions.', count: 1, value: 1 },
+    'potion_attack': { id: 'potion_attack', name: 'Attack Potion', type: 'CONSUMABLE', description: 'Boosts Accuracy.', count: 1, value: 20 },
+    'potion_strength': { id: 'potion_strength', name: 'Strength Potion', type: 'CONSUMABLE', description: 'Boosts Damage.', count: 1, value: 50 },
+    'potion_antipoison': { id: 'potion_antipoison', name: 'Antipoison', type: 'CONSUMABLE', description: 'Cures poison.', count: 1, value: 30 },
+
+    'uncut_sapphire': { id: 'uncut_sapphire', name: 'Uncut Sapphire', type: 'MATERIAL', description: 'Needs cutting.', count: 1, value: 25 },
+    'cut_sapphire': { id: 'cut_sapphire', name: 'Sapphire', type: 'MATERIAL', description: 'Blue gem.', count: 1, value: 35 },
+    'uncut_emerald': { id: 'uncut_emerald', name: 'Uncut Emerald', type: 'MATERIAL', description: 'Needs cutting.', count: 1, value: 50 },
+    'cut_emerald': { id: 'cut_emerald', name: 'Emerald', type: 'MATERIAL', description: 'Green gem.', count: 1, value: 70 },
+    'uncut_ruby': { id: 'uncut_ruby', name: 'Uncut Ruby', type: 'MATERIAL', description: 'Needs cutting.', count: 1, value: 100 },
+    'uncut_diamond': { id: 'uncut_diamond', name: 'Uncut Diamond', type: 'MATERIAL', description: 'Needs cutting.', count: 1, value: 200 },
+    'diamond': { id: 'diamond', name: 'Diamond', type: 'MATERIAL', description: 'Very hard.', count: 1, value: 300 },
     'dark_gem': { id: 'dark_gem', name: 'Dark Gem', type: 'MATERIAL', description: 'Pulsing with chaotic energy.', count: 1, value: 300, rarity: 'RARE' },
+    
     'iron_ingot': { id: 'iron_ingot', name: 'Iron Ingot', type: 'MATERIAL', description: 'Used for smithing.', count: 1, value: 15 },
     'herb': { id: 'herb', name: 'Herb', type: 'MATERIAL', description: 'Medicinal plant.', count: 1, value: 2 },
+    
     'potion_small': { id: 'potion_small', name: 'Small Potion', type: 'CONSUMABLE', description: 'Heals 20 HP.', count: 1, healAmount: 20, value: 10 },
     'potion_medium': { id: 'potion_medium', name: 'Medium Potion', type: 'CONSUMABLE', description: 'Heals 100 HP.', count: 1, healAmount: 100, value: 50 },
     'potion_large': { id: 'potion_large', name: 'Large Potion', type: 'CONSUMABLE', description: 'Heals 500 HP.', count: 1, healAmount: 500, value: 200 },
     
-    // Fish Progression
     'raw_fish': { id: 'raw_fish', name: 'Raw Fish', type: 'CONSUMABLE', description: 'Slimy. Heals 5 HP.', count: 1, healAmount: 5, value: 5 },
     'cooked_fish': { id: 'cooked_fish', name: 'Cooked Fish', type: 'CONSUMABLE', description: 'Tasty! Heals 15 HP.', count: 1, healAmount: 15, value: 10 },
-    
     'raw_trout': { id: 'raw_trout', name: 'Raw Trout', type: 'CONSUMABLE', description: 'A common river fish. Heals 10 HP.', count: 1, healAmount: 10, value: 10 },
     'cooked_trout': { id: 'cooked_trout', name: 'Cooked Trout', type: 'CONSUMABLE', description: 'Perfectly grilled. Heals 30 HP.', count: 1, healAmount: 30, value: 20 },
-    
     'raw_salmon': { id: 'raw_salmon', name: 'Raw Salmon', type: 'CONSUMABLE', description: 'Rich in oils. Heals 20 HP.', count: 1, healAmount: 20, value: 25 },
     'cooked_salmon': { id: 'cooked_salmon', name: 'Cooked Salmon', type: 'CONSUMABLE', description: 'A hearty meal. Heals 60 HP.', count: 1, healAmount: 60, value: 50 },
-    
     'raw_tuna': { id: 'raw_tuna', name: 'Raw Tuna', type: 'CONSUMABLE', description: 'A large ocean fish. Heals 40 HP.', count: 1, healAmount: 40, value: 50 },
     'cooked_tuna': { id: 'cooked_tuna', name: 'Cooked Tuna', type: 'CONSUMABLE', description: 'Steak of the sea. Heals 120 HP.', count: 1, healAmount: 120, value: 100 },
-    
     'raw_shark': { id: 'raw_shark', name: 'Raw Shark', type: 'CONSUMABLE', description: 'Apex predator meat. Heals 100 HP.', count: 1, healAmount: 100, value: 150 },
     'cooked_shark': { id: 'cooked_shark', name: 'Cooked Shark', type: 'CONSUMABLE', description: 'Legendary feast. Heals 300 HP.', count: 1, healAmount: 300, value: 300 },
 
     'iron_key': { id: 'iron_key', name: 'Iron Key', type: 'KEY', description: 'Opens basic locked doors and chests.', count: 1, value: 25 },
     'boss_key': { id: 'boss_key', name: 'Skull Key', type: 'KEY', description: 'Opens the massive chest guarded by a Dungeon Boss.', count: 1, value: 500, rarity: 'RARE' },
     
-    // Gadgets / Placables
     'mob_spawner_item': { id: 'mob_spawner_item', name: 'Cage of Souls', type: 'GADGET', description: 'A captured spawner. Use to place.', count: 1, value: 500, rarity: 'EPIC' },
     'campfire_kit': { id: 'campfire_kit', name: 'Campfire Kit', type: 'GADGET', description: 'Placeable cooking station.', count: 1, value: 25, rarity: 'COMMON' },
 
-    // Blueprints
     'blueprint_potion_medium': { id: 'blueprint_potion_medium', name: 'Blueprint: Medium Potion', type: 'BLUEPRINT', description: 'Teaches how to brew medium potions.', count: 1, value: 100, recipeId: 'potion_medium', rarity: 'UNCOMMON' },
     'blueprint_iron_sword': { id: 'blueprint_iron_sword', name: 'Blueprint: Iron Sword', type: 'BLUEPRINT', description: 'Teaches how to forge iron swords.', count: 1, value: 150, recipeId: 'sword_iron', rarity: 'UNCOMMON' },
 
-    // Equipment
     'fishing_rod': { id: 'fishing_rod', name: 'Old Fishing Rod', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Use near water to catch fish.', count: 1, weaponStats: WEAPON_TEMPLATES['Rod'], value: 20 },
     'sword_training': { id: 'sword_training', name: 'Training Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A dull sword.', count: 1, weaponStats: WEAPON_TEMPLATES['Sword'], value: 5 },
     'sword_iron': { id: 'sword_iron', name: 'Iron Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A sturdy iron sword.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 15 }, value: 50 },
     'relic': { id: 'relic', name: 'Ancient Relic', type: 'COLLECTIBLE', description: 'A glowing orb from the past.', count: 1, value: 100 },
     
-    // Collectibles
     'golden_idol': { id: 'golden_idol', name: 'Golden Idol', type: 'COLLECTIBLE', description: 'A heavy gold statue.', count: 1, value: 200 },
     'ancient_coin': { id: 'ancient_coin', name: 'Ancient Coin', type: 'COLLECTIBLE', description: 'Currency from a lost era.', count: 1, value: 50 },
     'gemstone': { id: 'gemstone', name: 'Gemstone', type: 'COLLECTIBLE', description: 'Sparkles in the dark.', count: 1, value: 100 },
@@ -237,7 +266,6 @@ export const RECIPES: Recipe[] = [
     { id: 'iron_key', name: 'Iron Key', resultItemId: 'iron_key', yield: 1, skill: 'Crafting', levelReq: 2, xpReward: 25, ingredients: [{itemId: 'iron_ingot', count: 1}], station: 'ANVIL' },
     { id: 'sword_iron', name: 'Iron Sword', resultItemId: 'sword_iron', yield: 1, skill: 'Crafting', levelReq: 3, xpReward: 50, ingredients: [{itemId: 'iron_ingot', count: 2}, {itemId: 'wood', count: 1}], station: 'ANVIL' },
     
-    // Cooking Recipes
     { id: 'cooked_fish', name: 'Cooked Fish', resultItemId: 'cooked_fish', yield: 1, skill: 'Cooking', levelReq: 1, xpReward: 10, ingredients: [{itemId: 'raw_fish', count: 1}], station: 'CAMPFIRE' },
     { id: 'cooked_trout', name: 'Cooked Trout', resultItemId: 'cooked_trout', yield: 1, skill: 'Cooking', levelReq: 5, xpReward: 20, ingredients: [{itemId: 'raw_trout', count: 1}], station: 'CAMPFIRE' },
     { id: 'cooked_salmon', name: 'Cooked Salmon', resultItemId: 'cooked_salmon', yield: 1, skill: 'Cooking', levelReq: 15, xpReward: 40, ingredients: [{itemId: 'raw_salmon', count: 1}], station: 'CAMPFIRE' },
@@ -246,7 +274,7 @@ export const RECIPES: Recipe[] = [
 ];
 
 export const MERCHANT_STOCK: { itemId: string, price: number }[] = [
-    { itemId: 'potion_small', price: 25 }, // Markup from value 10
+    { itemId: 'potion_small', price: 25 },
     { itemId: 'wood', price: 5 },
     { itemId: 'iron_ore', price: 15 },
     { itemId: 'campfire_kit', price: 50 },
@@ -275,5 +303,5 @@ export const PERKS: Record<string, Perk> = {
     'master_looter': { id: 'master_looter', name: 'Master Looter', description: 'Better drops.', icon: '💎', statBonus: { dex: 3 } },
 };
 
-// Initialize Maps via Generator (The array is mutated by reference in generator to add dynamic secrets)
-export const MAPS = createWorld(ALL_SECRETS);
+// INITIALIZE EMPTY MAPS CONTAINER
+export const MAPS: Record<string, GameMap> = {};

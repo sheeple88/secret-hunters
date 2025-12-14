@@ -1,10 +1,10 @@
 
 import React from 'react';
-import { Entity, AnimationType, WeaponType } from '../../types';
-import { ASSETS } from '../../assets';
+import { Entity, AnimationType, WeaponType } from '../types';
+import { ASSETS } from '../assets';
 import clsx from 'clsx';
-import { EnemyHPBar } from '../combat/EnemyHPBar';
-import { FloatingDamage } from '../combat/FloatingDamage';
+import { EnemyHPBar } from './combat/EnemyHPBar';
+import { FloatingDamage } from './combat/FloatingDamage';
 
 interface EntityProps {
   entity: Entity;
@@ -28,7 +28,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       if (entity.name.includes('Mayor')) sprite = ASSETS.MAYOR;
       else if (entity.name.includes('Merchant') || entity.name.includes('Blacksmith')) sprite = ASSETS.MERCHANT;
       else if (entity.name.includes('Chicken')) sprite = ASSETS.CHICKEN;
-      else if (entity.name.includes('Cat')) sprite = ASSETS.CHICKEN;
+      else if (entity.name.includes('Cat')) sprite = ASSETS.CHICKEN; // Fallback for Cat
       else sprite = ASSETS.NPC;
   }
   else if (entity.type === 'ENEMY') {

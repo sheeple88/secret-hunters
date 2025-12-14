@@ -108,13 +108,9 @@ export const handlePlayerMove = (
         const entityAtPos = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
         
         if (BLOCKED_TILES.includes(effectiveTile)) {
-             // NEW: Check if this is an interaction-based gather (bumping into it)
-             // Previously we gathered on bump. Now let's keep it bump to gather for simplicity/speed
-             // But use the NEW gathering service logic
-             
-             // Check if it's a gatherable resource
+             // Gatherable resource check
              if (TREE_TYPES.includes(effectiveTile) || effectiveTile === 'ROCK' || effectiveTile === 'OBSIDIAN' || effectiveTile === 'STONE_BRICK' || effectiveTile === 'FLOWER') {
-                 // Prevent movement
+                 // Prevent movement, allow interaction later
              } else {
                  return { newState: { ...prev, playerFacing: facing }, damageEvents: {} };
              }
@@ -212,7 +208,7 @@ export const handlePlayerMove = (
                 // Add Item
                 const existing = newInventory.find(i => i.id === lootItem.id);
                 if (existing) {
-                    newInventory = newInventory.map(i => i.id === lootItem.id ? { ...i, count: i.count + 1 } : i);
+                    newInventory = newInventory.map(i => i.id === lootItem.id ? { ...i, count: i.count + (1) } : i);
                 } else {
                     newInventory.push({ ...lootItem });
                 }
@@ -264,7 +260,6 @@ export const handlePlayerMove = (
         };
    }
 
-   // ... (Rest of existing movement logic for Items, Teleports, Crates stays exactly same) ...
    // Check Entity Collision (Pickups/Teleports only)
    let entity = targetMap.entities.find(e => e.pos.x === nextPos.x && e.pos.y === nextPos.y);
 

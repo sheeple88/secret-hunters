@@ -1,5 +1,4 @@
 
-
 export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 export type Position = {
@@ -14,13 +13,11 @@ export type Stats = {
   regeneration: number;
   hp: number;
   maxHp: number;
-  xp: number; // General Level XP
+  xp: number;
   level: number;
   gold: number;
   unspentStatPoints: number;
 };
-
-export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
 
 export type SkillName = 'Attack' | 'Strength' | 'Defence' | 'Constitution' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Smithing' | 'Herblore' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
 
@@ -58,7 +55,7 @@ export interface WeaponStats {
     range: number;
     cleave?: boolean;
     multiHitChance?: number;
-    magicType?: MagicType;
+    magicType?: string;
     attackSpeed?: number;
 }
 
@@ -84,7 +81,7 @@ export interface Perk {
   description: string;
   icon: string;
   statBonus?: Partial<Stats>;
-  specialEffect?: 'VISION_PLUS' | 'LAVA_RESIST' | 'XP_BOOST' | 'GOLD_BOOST' | 'AUTO_HEAL' | 'SECRET_SENSE' | 'NIGHT_VISION';
+  specialEffect?: string;
 }
 
 export interface Achievement {
@@ -130,7 +127,7 @@ export interface Entity {
   id: string;
   name: string;
   type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE' | 'ITEM_DROP';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'FURNACE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT' | 'FOUNTAIN' | 'LAMP' | 'PLANT'; 
+  subType?: string; 
   symbol: string;
   color: string;
   pos: Position;
@@ -148,10 +145,8 @@ export interface Entity {
   aiType?: AiType;
   aggroRange?: number;
   attackRange?: number;
-  magicType?: MagicType;
   isSpawned?: boolean;
   lastSpawnTime?: number;
-  lastSpawnStep?: number;
   spawnType?: string;
   schedule?: { dayPos: Position, nightPos: Position }; 
 }
@@ -166,11 +161,10 @@ export interface GameMap {
   tiles: TileType[][] | string[][];
   entities: Entity[];
   neighbors: { UP?: string; DOWN?: string; LEFT?: string; RIGHT?: string; };
-  exits: { pos: Position; targetMapId: string; targetPos: Position }[];
   difficulty: number;
   biome: string;
   isTown?: boolean;
-  source?: string; // New: Debug tracking for map source
+  source?: string;
 }
 
 export interface LogEntry {
@@ -181,6 +175,15 @@ export interface LogEntry {
 }
 
 export type AnimationType = 'ATTACK' | 'HURT' | 'DODGE' | 'HEAL' | 'SHOOT' | 'INTERACT' | 'FISH_CAST' | 'FISH_CATCH';
+
+export interface MonsterStats {
+    baseHp: number;
+    baseDmg: number;
+    defence: number;
+    weakness?: DamageType;
+    xpMod: number;
+    attackSound?: string;
+}
 
 export interface GameState {
   playerPos: Position;
@@ -216,8 +219,6 @@ export interface GameState {
   activeQuest: Quest | null;
   exploration: Record<string, number[][]>;
   worldModified: Record<string, Record<string, TileType>>;
-  knownWaypoints: string[];
-  knownLocations: string[];
   animations: Record<string, AnimationType>;
   time: number;
   autoDistributeStats: boolean;
@@ -229,4 +230,6 @@ export interface GameState {
       regeneration: number;
   };
   worldTier: number;
+  knownWaypoints: string[];
+  knownLocations: string[];
 }

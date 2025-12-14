@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GameState, Stats, Item, Recipe } from '../../types';
 
@@ -67,6 +66,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onEquip,
   onCraft,
   onRespawn,
+  onResetSave,
+  onSaveGame,
   onConsume,
   onTogglePerk,
   onPuzzleSolve,
@@ -78,7 +79,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onStatIncrease,
   onAutoConfigChange,
   onResetStats,
-  volume, setVolume, zoom, setZoom
+  volume, setVolume, zoom, setZoom,
+  lastSaved
 }) => {
 
   const hasUnseenSecret = gameState.flags['new_secret'] === true;
@@ -155,6 +157,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             setVolume={setVolume}
             zoom={zoom}
             setZoom={setZoom}
+            onSave={onSaveGame}
+            onReset={onResetSave}
+            lastSaved={lastSaved}
         />
       )}
 

@@ -1,7 +1,7 @@
 
 // Helper for pixel art assets
 export const createAsset = (svgContent: string) => 
-  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${svgContent}</svg>`)}`;
+  `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${svgContent}</svg>`)}`;
 
 // --- GENERATORS (Save space & allow variations) ---
 
@@ -415,7 +415,7 @@ export const ASSETS = {
   SKELETON: createAsset(`<rect x="6" y="2" width="4" height="4" fill="#e5e5e5"/><rect x="7" y="6" width="2" height="6" fill="#e5e5e5"/><rect x="5" y="7" width="6" height="1" fill="#e5e5e5"/>`),
   SNAKE: createAsset(`<path d="M2,12 Q4,8 6,12 Q8,16 10,12 L14,10" fill="none" stroke="#65a30d" stroke-width="2"/><circle cx="14" cy="10" r="1" fill="#65a30d"/>`),
   SCORPION: createAsset(`<rect x="5" y="8" width="6" height="4" fill="#a16207"/><path d="M4,8 L2,6 M12,8 L14,6 M11,8 L13,4" stroke="#a16207" stroke-width="2"/>`),
-  MINOTAUR: createAsset(`<rect x="4" y="4" width="8" height="10" fill="#573a2e"/><path d="M4,4 L2,2 M12,4 L14,2" stroke="#e5e5e5" stroke-width="2"/><circle cx="6" cy="7" r="1" fill="red"/><circle cx="10" cy="7" r="1" fill="red"/><rect x="6" y="10" width="4" height="4" fill="#000" opacity="0.3"/>`),
+  MINOTAUR: createAsset(`<rect x="4" y="4" width="8" height="10" fill="#573a2e"/><path d="M4,4 L2,2 M12,4 L14,2" stroke="#e5e7eb" stroke-width="2"/><circle cx="6" cy="7" r="1" fill="red"/><circle cx="10" cy="7" r="1" fill="red"/><rect x="6" y="10" width="4" height="4" fill="#000" opacity="0.3"/>`),
   BEHOLDER: createAsset(`<circle cx="8" cy="8" r="6" fill="#4c1d95"/><circle cx="8" cy="8" r="3" fill="#fef08a"/><circle cx="8" cy="8" r="1" fill="#000"/><path d="M8,2 L8,0 M14,8 L16,8 M8,14 L8,16 M2,8 L0,8" stroke="#a78bfa"/>`),
   MIMIC: createAsset(`<rect x="2" y="5" width="12" height="10" fill="#a16207" stroke="#422006" stroke-width="1"/><rect x="2" y="8" width="12" height="1" fill="#422006" opacity="0.3"/><rect x="7" y="8" width="2" height="2" fill="#facc15"/><path d="M4,12 L6,14 L8,12 L10,14 L12,12" stroke="#fff" stroke-width="1"/><circle cx="5" cy="7" r="1" fill="red"/><circle cx="11" cy="7" r="1" fill="red"/>`),
   FIRE_ELEMENTAL: createAsset(`<circle cx="8" cy="10" r="4" fill="#ea580c"/><path d="M8,10 Q6,4 8,2 Q10,4 8,10" fill="#f97316"/><circle cx="7" cy="9" r="1" fill="#fef3c7"/><circle cx="9" cy="9" r="1" fill="#fef3c7"/>`),

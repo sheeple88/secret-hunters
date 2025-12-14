@@ -1,4 +1,5 @@
 
+
 export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 export type Position = {
@@ -22,7 +23,7 @@ export type Stats = {
 export type MagicType = 'FIRE' | 'WATER' | 'EARTH' | 'AIR' | 'LIGHTNING' | 'ICE' | 'NATURE' | 'POISON' | 'LIGHT' | 'DARK' | 'ARCANE' | 'VOID' | 'TIME' | 'SPACE' | 'GRAVITY' | 'BLOOD' | 'SOUL' | 'CHAOS' | 'ORDER' | 'METAL';
 
 // Added Attack, Strength, Defence, Constitution
-export type SkillName = 'Attack' | 'Strength' | 'Defence' | 'Constitution' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
+export type SkillName = 'Attack' | 'Strength' | 'Defence' | 'Constitution' | 'Dexterity' | 'Agility' | 'Logging' | 'Mining' | 'Smithing' | 'Herblore' | 'Crafting' | 'Fletching' | 'Carving' | 'Alchemy' | 'Fishing' | 'Cooking';
 
 export interface Skill {
   name: SkillName;
@@ -39,7 +40,7 @@ export interface Recipe {
     levelReq: number;
     xpReward: number;
     ingredients: { itemId: string; count: number }[];
-    station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE';
+    station?: 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'FURNACE';
 }
 
 export type ItemType = 'MATERIAL' | 'CONSUMABLE' | 'EQUIPMENT' | 'JUNK' | 'KEY' | 'COLLECTIBLE' | 'GADGET' | 'BLUEPRINT';
@@ -98,12 +99,14 @@ export interface Achievement {
 
 export interface Secret {
   id: string;
-  type: 'COMBAT' | 'WORLD' | 'INTERACTION';
+  type: 'COMBAT' | 'WORLD' | 'INTERACTION' | 'ARTISAN' | 'SILLY';
   title: string;
   hint: string;
   description: string;
   statBonus?: Partial<Stats>;
   perkId?: string;
+  cosmeticUnlock?: string; 
+  titleReward?: string;
   condition: (gameState: GameState) => boolean;
 }
 
@@ -128,7 +131,7 @@ export interface Entity {
   id: string;
   name: string;
   type: 'PLAYER' | 'NPC' | 'ENEMY' | 'OBJECT' | 'COLLECTIBLE' | 'ITEM_DROP';
-  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT'; 
+  subType?: 'CHEST' | 'BED' | 'WAYPOINT' | 'SIGNPOST' | 'ANVIL' | 'WORKBENCH' | 'ALCHEMY_TABLE' | 'CAMPFIRE' | 'PRESSURE_PLATE' | 'PUSH_BLOCK' | 'CRATE' | 'LOCKED_DOOR' | 'LOCKED_CHEST' | 'DOOR' | 'MOB_SPAWNER' | 'BOSS' | 'BOSS_CHEST' | 'OPEN_CHEST' | 'FISHING_SPOT' | 'FURNACE' | 'LAMP' | 'FOUNTAIN' | 'PLANT'; 
   symbol: string;
   color: string;
   pos: Position;
@@ -194,6 +197,11 @@ export interface GameState {
   
   unlockedPerks: string[];
   equippedPerks: string[];
+  
+  unlockedCosmetics: string[];
+  equippedCosmetic: string | null;
+  activeTitle: string | null;
+
   bestiary: string[];
   counters: Record<string, number>;
   logs: LogEntry[];

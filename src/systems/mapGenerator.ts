@@ -59,15 +59,15 @@ export const regenerateAllMaps = (maps: Record<string, GameMap>, secrets: Secret
     }
 };
 
+// New function to initialize the mutable MAPS object
+export const initializeWorld = (maps: Record<string, GameMap>, secrets: Secret[]) => {
+    regenerateAllMaps(maps, secrets);
+};
+
 export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
     const maps: Record<string, GameMap> = {};
     regenerateAllMaps(maps, secrets);
     return maps;
-};
-
-// New function to initialize the mutable MAPS object
-export const initializeWorld = (maps: Record<string, GameMap>, secrets: Secret[]) => {
-    regenerateAllMaps(maps, secrets);
 };
 
 export const generateDungeon = (
@@ -219,7 +219,7 @@ export const generateDungeon = (
     return { 
         id, 
         name: `${type === 'CRYPT' ? 'Dark Crypt' : type === 'CAVE' ? 'Deep Cavern' : 'Magma Core'} ${worldTier > 0 ? '(Hard)' : ''}`,
-        width, height, tiles, entities, neighbors: {}, exits: [], difficulty: dungeonDifficulty, biome: 'DUNGEON',
+        width, height, tiles, entities, neighbors: {}, difficulty: dungeonDifficulty, biome: 'DUNGEON',
         source: 'mapGenerator.ts (Dungeon)'
     };
 };
@@ -412,7 +412,6 @@ export const generateMap = (id: string, name: string, biome: string, difficulty:
         tiles, 
         entities, 
         neighbors: {}, 
-        exits: [], 
         difficulty, 
         biome, 
         isTown: false, // Always false for this generator

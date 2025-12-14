@@ -1,10 +1,10 @@
 
 import React from 'react';
-import { GameState, GameMap } from '../../types';
+import { GameState, GameMap } from '../types';
 import { Tile } from './Tile';
 import { EntityComponent } from './EntityComponent';
-import { hasLineOfSight } from '../../systems/ai';
-import { FloatingDamage } from '../combat/FloatingDamage';
+import { hasLineOfSight } from '../systems/ai';
+import { FloatingDamage } from './combat/FloatingDamage';
 
 interface GameRendererProps {
   currentMap: GameMap;

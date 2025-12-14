@@ -42,7 +42,6 @@ export const generateInterior = (id: string, name: string, exitTo: {mapId: strin
         tiles, 
         entities, 
         neighbors: {}, 
-        exits: [], 
         difficulty: 0, 
         biome: 'INTERIOR', 
         isTown: false,

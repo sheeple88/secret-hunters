@@ -212,7 +212,6 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
         tiles, 
         entities, 
         neighbors: {}, 
-        exits: [], 
         difficulty: 0, 
         biome: 'GRASS', 
         isTown: true,
