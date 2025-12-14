@@ -1,7 +1,6 @@
 
 import { GameMap, TileType, Entity, Item, Position, SkillName, Skill, Recipe, GameState, Quest, EquipmentSlot, Stats, Perk, WeaponStats, MagicType, DamageType, Secret } from './types';
 import { ASSETS } from './assets';
-import { createWorld } from './systems/mapGenerator';
 import { uid } from './systems/mapUtils';
 import { TOWN_SECRETS } from './data/town/townSecrets';
 import { COMBAT_SECRETS } from './data/secrets/combat';
@@ -269,28 +268,9 @@ export const ITEMS: Record<string, Item> = {
     'fishing_rod': { id: 'fishing_rod', name: 'Old Fishing Rod', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Use near water to catch fish.', count: 1, weaponStats: WEAPON_TEMPLATES['Rod'], value: 20 },
     'sword_training': { id: 'sword_training', name: 'Training Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A dull sword.', count: 1, weaponStats: WEAPON_TEMPLATES['Sword'], value: 5 },
     'sword_iron': { id: 'sword_iron', name: 'Iron Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A sturdy iron sword.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 15 }, value: 50 },
-    
-    // New Artisan Gear
-    'bronze_sword': { id: 'bronze_sword', name: 'Bronze Sword', type: 'EQUIPMENT', slot: 'WEAPON', description: 'A beginner weapon.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 12 }, value: 15 },
-    'bronze_dagger': { id: 'bronze_dagger', name: 'Bronze Dagger', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Fast but weak.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Dagger'], power: 8 }, value: 10 },
-    'bronze_scimitar': { id: 'bronze_scimitar', name: 'Bronze Scimitar', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Curved blade.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 14, accuracy: 12 }, value: 25 },
-    'bronze_plate': { id: 'bronze_plate', name: 'Bronze Platebody', type: 'EQUIPMENT', slot: 'BODY', description: 'Basic protection.', count: 1, stats: { hp: 5, str: 1 }, value: 40 },
-    
-    'iron_dagger': { id: 'iron_dagger', name: 'Iron Dagger', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Standard dagger.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Dagger'], power: 10 }, value: 20 },
-    'iron_plate': { id: 'iron_plate', name: 'Iron Platebody', type: 'EQUIPMENT', slot: 'BODY', description: 'Standard protection.', count: 1, stats: { hp: 10, str: 2 }, value: 100 },
-    
-    'steel_scimitar': { id: 'steel_scimitar', name: 'Steel Scimitar', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Reliable blade.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Sword'], power: 22, accuracy: 15 }, value: 150 },
-    'steel_plate': { id: 'steel_plate', name: 'Steel Platebody', type: 'EQUIPMENT', slot: 'BODY', description: 'Solid defense.', count: 1, stats: { hp: 20, str: 4 }, value: 300 },
-
-    'oak_shortbow': { id: 'oak_shortbow', name: 'Oak Shortbow', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Better than twigs.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Bow'], power: 12 }, value: 40 },
-    'oak_longbow': { id: 'oak_longbow', name: 'Oak Longbow', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Long range.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Bow'], power: 14, range: 6 }, value: 50 },
-    'willow_shortbow': { id: 'willow_shortbow', name: 'Willow Shortbow', type: 'EQUIPMENT', slot: 'WEAPON', description: 'Fast firing.', count: 1, weaponStats: { ...WEAPON_TEMPLATES['Bow'], power: 18 }, value: 100 },
-    
-    'leather_gloves': { id: 'leather_gloves', name: 'Leather Gloves', type: 'EQUIPMENT', slot: 'ACCESSORY', description: 'Protects hands.', count: 1, stats: { dex: 1 }, value: 10 },
-    'leather_cowl': { id: 'leather_cowl', name: 'Leather Cowl', type: 'EQUIPMENT', slot: 'HEAD', description: 'Light headgear.', count: 1, stats: { dex: 2 }, value: 15 },
-    'amulet_sapphire': { id: 'amulet_sapphire', name: 'Sapphire Amulet', type: 'EQUIPMENT', slot: 'ACCESSORY', description: 'Magical neckwear.', count: 1, stats: { int: 5 }, value: 150 },
-
     'relic': { id: 'relic', name: 'Ancient Relic', type: 'COLLECTIBLE', description: 'A glowing orb from the past.', count: 1, value: 100 },
+    
+    // Collectibles
     'golden_idol': { id: 'golden_idol', name: 'Golden Idol', type: 'COLLECTIBLE', description: 'A heavy gold statue.', count: 1, value: 200 },
     'ancient_coin': { id: 'ancient_coin', name: 'Ancient Coin', type: 'COLLECTIBLE', description: 'Currency from a lost era.', count: 1, value: 50 },
     'gemstone': { id: 'gemstone', name: 'Gemstone', type: 'COLLECTIBLE', description: 'Sparkles in the dark.', count: 1, value: 100 },
@@ -352,5 +332,5 @@ export const ALL_SECRETS: Secret[] = [
     ...TOWN_SECRETS
 ];
 
-// Initialize Maps via Generator
-export const MAPS = createWorld(ALL_SECRETS);
+// Initialize as empty to break circular dependency. App.tsx will fill this.
+export const MAPS: Record<string, GameMap> = {};

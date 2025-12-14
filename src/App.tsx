@@ -11,11 +11,17 @@ import { GameHUD } from './components/hud/GameHUD';
 import { PuzzleConfig } from './components/modals/PuzzleModal';
 import { handlePlayerMove } from './systems/movement';
 import { generateBossRewards, generateLoot } from './services/itemService';
-import { regenerateAllMaps } from './systems/mapGenerator';
+import { initializeWorld, regenerateAllMaps } from './systems/mapGenerator';
 import { checkQuestUpdate } from './systems/questUtils';
 import { handlePlayerAttack } from './systems/combat/playerAttack';
 import { processEnemyTurn } from './systems/combat/enemyAI';
 import { processEnemyTurns, processSpawners } from './systems/ai'; 
+
+// --- Initialize World if Empty (Fix for Circular Dependency) ---
+if (Object.keys(MAPS).length === 0) {
+    console.log("Initializing World Map...");
+    initializeWorld(MAPS, ALL_SECRETS);
+}
 
 // --- Helper Functions ---
 const getTimestamp = () => Date.now();
@@ -115,9 +121,9 @@ const distributePoints = (stats: Stats, allocation: any, points: number): { newS
 };
 
 export default function App() {
-  // --- FRESH STATE INITIALIZATION (NO SAVE/LOAD FORCED) ---
+  // --- FRESH STATE INITIALIZATION ---
   const [gameState, setGameState] = useState<GameState>({
-    playerPos: { x: 30, y: 28 }, // Center of Havens Rest (Square is near 30,25)
+    playerPos: { x: 28, y: 22 }, // SPAWN: Town Square
     playerFacing: 'DOWN',
     currentMapId: 'map_10_10',
     stats: INITIAL_STATS,
@@ -130,8 +136,8 @@ export default function App() {
     completedQuestIds: [],
     unlockedPerks: [],
     equippedPerks: [],
-    unlockedCosmetics: [],
-    equippedCosmetic: null,
+    unlockedCosmetics: ['party_hat'], 
+    equippedCosmetic: 'party_hat', // Default
     activeTitle: null,
     bestiary: [],
     counters: { map_revision: 999, steps_taken: 0, enemies_killed: 0, trees_cut: 0, rocks_mined: 0, fish_caught: 0, items_crafted: 0, damage_taken: 0, puzzles_solved: 0, lore_read: 0 }, 
@@ -142,7 +148,7 @@ export default function App() {
     lastCombatTime: 0,
     combatTargetId: null,
     activeQuest: null,
-    // Exploration: Initialize interior as revealed (10x8), town as hidden (60x50)
+    // Exploration: Initialize interior as revealed, town as hidden (60x50)
     exploration: { 
         'interior_home': Array(8).fill(null).map(() => Array(10).fill(1)), 
         'map_10_10': Array(50).fill(null).map(() => Array(60).fill(0)) 
@@ -167,13 +173,97 @@ export default function App() {
   const [volume, setVolume] = useState(0.3); 
   const [isMobile, setIsMobile] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  // --- HARD RESET MAPS ON MOUNT ---
+  // --- ENSURE MAP INTEGRITY ON MOUNT ---
   useEffect(() => {
-      console.log("HARD RESET: Wiping LocalStorage and Regenerating World");
-      // Force regeneration of all maps to ensure new Town logic is used
-      regenerateAllMaps(MAPS, ALL_SECRETS);
+      // If the map is missing or wrong size, regenerate
+      if (!MAPS['map_10_10'] || MAPS['map_10_10'].width < 60) {
+          console.log("Regenerating Malformed World...");
+          regenerateAllMaps(MAPS, ALL_SECRETS);
+          // Also reset player pos if they are OOB
+          setGameState(prev => ({
+              ...prev,
+              playerPos: { x: 28, y: 22 },
+              currentMapId: 'map_10_10',
+              exploration: { 
+                'interior_home': Array(8).fill(null).map(() => Array(10).fill(1)), 
+                'map_10_10': Array(50).fill(null).map(() => Array(60).fill(0)) 
+              },
+          }));
+      }
   }, []);
+
+  // --- SAVE/LOAD ---
+  useEffect(() => {
+      const saveKey = 'sh_save_v5_fix'; // NEW SAVE KEY TO FORCE UPDATE
+      const saved = localStorage.getItem(saveKey); 
+      if (saved) {
+          try {
+              const parsed = JSON.parse(saved);
+              if (parsed.gameState && parsed.gameState.stats) {
+                  const gs = parsed.gameState;
+                  // Restore Settings
+                  if (parsed.settings) {
+                      setVolume(parsed.settings.volume ?? 0.3);
+                      setUserZoom(parsed.settings.zoom ?? 1.0);
+                  }
+                  
+                  let exp = gs.exploration || {};
+                  
+                  // Ensure exploration grids match current map sizes
+                  Object.keys(MAPS).forEach(mapId => {
+                      const map = MAPS[mapId];
+                      if (map) {
+                          if (!exp[mapId] || exp[mapId].length !== map.height || (exp[mapId][0] && exp[mapId][0].length !== map.width)) {
+                              console.log(`Resizing exploration grid for ${mapId}`);
+                              const newGrid = Array(map.height).fill(null).map(() => Array(map.width).fill(0));
+                              // Reveal Center of Town for safety
+                              if (mapId === 'map_10_10') {
+                                   for(let y=0; y<map.height; y++) {
+                                       for(let x=0; x<map.width; x++) {
+                                           if (Math.abs(x-28) <= 6 && Math.abs(y-22) <= 6) newGrid[y][x] = 1;
+                                       }
+                                   }
+                              }
+                              exp[mapId] = newGrid;
+                          }
+                      }
+                  });
+
+                  setGameState({ 
+                      ...gs, 
+                      exploration: exp,
+                      animations: {}, 
+                      worldModified: gs.worldModified || {}, 
+                      time: gs.time || 800,
+                      // FORCE HAT
+                      unlockedCosmetics: [...new Set([...(gs.unlockedCosmetics || []), 'party_hat'])],
+                      equippedCosmetic: 'party_hat'
+                  });
+              }
+          } catch (e) { console.error(e); }
+      }
+      setHasLoaded(true);
+  }, []);
+
+  const handleSave = () => {
+      const saveData = {
+          gameState: gameState,
+          settings: {
+              volume,
+              zoom: userZoom
+          },
+          timestamp: Date.now()
+      };
+      localStorage.setItem('sh_save_v5_fix', JSON.stringify(saveData));
+  };
+
+  useEffect(() => {
+      if (!hasLoaded) return;
+      const interval = setInterval(handleSave, 10000);
+      return () => clearInterval(interval);
+  }, [gameState, hasLoaded, volume, userZoom]);
 
   // NEW: Combat Number Cleanup Loop
   useEffect(() => {
@@ -216,7 +306,7 @@ export default function App() {
                   stats: newStats,
                   counters: newCounters,
                   logs: [...prev.logs, ...aiResult.logs].slice(-50), 
-                  animations: { ...prev.animations, ...aiResult.anims } // Fixed property access 'anims'
+                  animations: { ...prev.animations, ...aiResult.anims } 
               };
           });
       }, 800); 
@@ -405,16 +495,20 @@ export default function App() {
   }, []);
 
   const handleTogglePerk = (id: string) => {
+      // Toggle Hat Logic handled here now for simplicity if ID starts with cosmetic keyword
+      if (gameState.unlockedCosmetics.includes(id)) {
+           setGameState(p => ({
+               ...p,
+               equippedCosmetic: p.equippedCosmetic === id ? null : id
+           }));
+           return;
+      }
+
       if (PERKS[id]) {
           setGameState(p => { 
               const eq = p.equippedPerks.includes(id) ? p.equippedPerks.filter(x => x !== id) : [...p.equippedPerks, id].slice(0,3); 
               return { ...p, equippedPerks: eq }; 
           });
-      } else {
-          setGameState(p => ({ 
-              ...p, 
-              equippedCosmetic: id === 'COSMETIC_NONE' ? null : (p.equippedCosmetic === id ? null : id) 
-          }));
       }
   };
 
@@ -558,8 +652,8 @@ export default function App() {
               stats: newStats, 
               skills: newSkills, 
               completedQuestIds, 
-              lastCombatTime: newCombatTime,
-              bestiary: newBestiary,
+              lastCombatTime: newCombatTime, 
+              bestiary: newBestiary, 
               worldTier: newWorldTier
           };
       });
@@ -791,7 +885,7 @@ export default function App() {
             onRespawn={() => { 
                 setGameState(p => ({ 
                     ...p, 
-                    playerPos: {x: 30, y: 28}, // RESPAWN AT NEW TOWN CENTER
+                    playerPos: {x: 28, y: 22}, // NEW TOWN SPAWN
                     currentMapId: 'map_10_10', 
                     stats: { ...p.stats, hp: p.stats.maxHp } 
                 })); 

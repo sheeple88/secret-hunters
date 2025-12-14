@@ -1,5 +1,4 @@
 
-
 // Helper for pixel art assets
 export const createAsset = (svgContent: string) => 
   `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${svgContent}</svg>`)}`;
@@ -425,7 +424,7 @@ export const ASSETS = {
   KRAKEN: createAsset(`<rect x="4" y="4" width="8" height="6" fill="#7e22ce"/><path d="M4,10 Q2,14 4,16 M8,10 Q8,16 8,16 M12,10 Q14,14 12,16" stroke="#7e22ce" stroke-width="2" fill="none"/>`),
   LICH: createAsset(`<rect x="5" y="2" width="6" height="12" fill="#312e81"/><circle cx="8" cy="4" r="2" fill="#fef9c3"/><circle cx="7" cy="4" r="0.5" fill="#3b82f6"/><circle cx="9" cy="4" r="0.5" fill="#3b82f6"/>`),
 
-  // NEW COSMETICS
+  // NEW COSMETICS - BRIGHTER COLORS
   HAT_PARTY: createAsset(`<path d="M4,14 L12,14 L8,2 Z" fill="#ec4899"/><circle cx="8" cy="2" r="1.5" fill="#fde047"/>`),
   HAT_CROWN: createAsset(`<path d="M2,12 L14,12 L14,6 L11,9 L8,4 L5,9 L2,6 Z" fill="#fbbf24"/><circle cx="2" cy="6" r="1" fill="#fca5a5"/><circle cx="14" cy="6" r="1" fill="#fca5a5"/><circle cx="8" cy="4" r="1" fill="#fca5a5"/>`),
   HAT_TOPHAT: createAsset(`<rect x="4" y="4" width="8" height="8" fill="#171717"/><rect x="2" y="12" width="12" height="1" fill="#171717"/><rect x="4" y="10" width="8" height="1" fill="#dc2626"/>`),

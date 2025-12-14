@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { Entity, AnimationType, WeaponType } from '../../types';
 import { ASSETS } from '../../assets';
@@ -153,11 +152,11 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
       zIndex: weaponZIndex, pointerEvents: 'none'
   };
 
-  // Hat Style
+  // Hat Style - Adjusted for better visibility
   const hatStyle: React.CSSProperties = {
-      position: 'absolute', width: '16px', height: '16px', top: -10, left: 8,
+      position: 'absolute', width: '16px', height: '16px', top: -12, left: 8,
       transform: isFlipped ? 'scaleX(-1) translateX(8px)' : 'scaleX(1)', 
-      zIndex: 32, pointerEvents: 'none'
+      zIndex: 40, pointerEvents: 'none' // Higher Z-Index to prevent clipping
   };
 
   let weaponSprite = null;
@@ -211,7 +210,7 @@ export const EntityComponent: React.FC<EntityProps> = ({ entity, isPlayer, isAct
         
         {hatSprite && (
             <div style={hatStyle} className={isPlayer ? "animate-bounce-slight" : ""}>
-                <img src={hatSprite} className="w-full h-full object-contain" alt="hat"/>
+                <img src={hatSprite} className="w-full h-full object-contain drop-shadow-md" alt="hat"/>
             </div>
         )}
 

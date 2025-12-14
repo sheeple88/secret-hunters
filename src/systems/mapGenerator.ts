@@ -12,7 +12,7 @@ export const regenerateAllMaps = (maps: Record<string, GameMap>, secrets: Secret
     // Clear existing keys to ensure fresh generation
     Object.keys(maps).forEach(key => delete maps[key]);
     
-    // Generate Haven's Rest (Town) - HARDCODED at 10,10
+    // Generate Haven's Rest (Town)
     generateHavensRest(maps);
     
     // Generate World Grid 20x20
@@ -20,7 +20,7 @@ export const regenerateAllMaps = (maps: Record<string, GameMap>, secrets: Secret
         for(let x=0; x<20; x++) {
             const id = `map_${x}_${y}`;
             
-            // CRITICAL: Skip if map already exists (Havens Rest)
+            // Skip if map already exists (Havens Rest)
             if (maps[id]) continue;
             
             let biome = 'GRASS';
@@ -63,6 +63,11 @@ export const createWorld = (secrets: Secret[]): Record<string, GameMap> => {
     const maps: Record<string, GameMap> = {};
     regenerateAllMaps(maps, secrets);
     return maps;
+};
+
+// New function to initialize the mutable MAPS object
+export const initializeWorld = (maps: Record<string, GameMap>, secrets: Secret[]) => {
+    regenerateAllMaps(maps, secrets);
 };
 
 export const generateDungeon = (
@@ -219,7 +224,6 @@ export const generateDungeon = (
     };
 };
 
-// Removed isTown parameter and logic entirely
 export const generateMap = (id: string, name: string, biome: string, difficulty: number): GameMap => {
     const width = 20;
     const height = 15;
