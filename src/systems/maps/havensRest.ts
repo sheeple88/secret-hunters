@@ -165,7 +165,8 @@ export const generateHavensRest = (maps: Record<string, GameMap>) => {
             color: npc.color,
             pos: npc.dayPos, // Start at day pos
             dialogue: npc.dialogue,
-            schedule: { dayPos: npc.dayPos, nightPos: npc.nightPos }
+            schedule: { dayPos: npc.dayPos, nightPos: npc.nightPos },
+            questId: npc.questId
         });
     });
 

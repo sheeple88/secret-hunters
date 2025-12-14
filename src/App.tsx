@@ -14,7 +14,7 @@ import { generateBossRewards, generateLoot } from './services/itemService';
 import { generateHavensRest } from './systems/maps/havensRest';
 import { checkQuestUpdate } from './systems/questUtils';
 import { handlePlayerAttack } from './systems/combat/playerAttack';
-import { processEnemyTurn } from './systems/combat/enemyAI';
+import { processEnemyTurn, processSpawners } from './systems/combat/enemyAI';
 
 // --- Helper Functions ---
 const getTimestamp = () => Date.now();
@@ -90,7 +90,6 @@ const distributePoints = (stats: Stats, allocation: any, points: number): { newS
 
     if (totalWeight > 0) {
         let usedPoints = 0;
-        
         const addStr = Math.floor(points * (str / totalWeight));
         const addDex = Math.floor(points * (dex / totalWeight));
         const addInt = Math.floor(points * (int / totalWeight));
@@ -116,7 +115,7 @@ const distributePoints = (stats: Stats, allocation: any, points: number): { newS
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>({
-    playerPos: { x: 30, y: 25 }, // Centered in 60x50 map
+    playerPos: { x: 30, y: 25 }, // Centered in new 60x50 map
     playerFacing: 'DOWN',
     currentMapId: 'map_10_10',
     stats: INITIAL_STATS,
@@ -124,19 +123,14 @@ export default function App() {
     skills: INITIAL_SKILLS,
     inventory: [],
     knownRecipes: DEFAULT_RECIPES,
-    
     unlockedSecretIds: [],
     unlockedAchievementIds: [],
     completedQuestIds: [],
-    
     unlockedPerks: [],
     equippedPerks: [],
-    
-    // Cosmetics Defaults
     unlockedCosmetics: [],
     equippedCosmetic: null,
     activeTitle: null,
-
     bestiary: [],
     counters: { map_revision: 0, steps_taken: 0, enemies_killed: 0, trees_cut: 0, rocks_mined: 0, fish_caught: 0, items_crafted: 0, damage_taken: 0, puzzles_solved: 0, lore_read: 0 }, 
     logs: [{ id: 'init', message: 'Welcome to Secret Hunters!', type: 'INFO', timestamp: Date.now() }],
@@ -146,7 +140,7 @@ export default function App() {
     lastCombatTime: 0,
     combatTargetId: null,
     activeQuest: null,
-    // Initialize correct size for map_10_10 (50 rows, 60 cols)
+    // EXPLORATION GRID SIZE FIX: 50 rows, 60 cols for map_10_10
     exploration: { 'map_10_10': Array(50).fill(null).map((_, y) => Array(60).fill(0).map((_, x) => (Math.abs(x-30) <= 6 && Math.abs(y-25) <= 6) ? 1 : 0)) },
     worldModified: {},
     knownWaypoints: [],
@@ -172,6 +166,108 @@ export default function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+
+  // --- NEW INTEGRATION START ---
+
+  // 1. Force Map Regeneration & Fix Save Compatibility
+  useEffect(() => {
+      // Force regeneration of Haven's Rest to ensure new layout/entities are loaded into global MAPS
+      generateHavensRest(MAPS);
+      console.log("Haven's Rest Map Regenerated (60x50)");
+
+      // Fix Save Data Mismatch (Exploration Grid Size)
+      setGameState(prev => {
+          const currentMap = MAPS[prev.currentMapId];
+          const currentExp = prev.exploration[prev.currentMapId];
+          
+          // Check if map size matches exploration grid
+          if (currentMap && currentExp && (currentExp.length !== currentMap.height || (currentExp[0] && currentExp[0].length !== currentMap.width))) {
+              console.warn("Map dimensions mismatch detected. Resetting town exploration.");
+              
+              const newExp = Array(currentMap.height).fill(null).map(() => Array(currentMap.width).fill(0));
+              // Reveal spawn area
+              const spawnX = 30;
+              const spawnY = 25;
+              for(let y=spawnY-5; y<=spawnY+5; y++) {
+                  for(let x=spawnX-5; x<=spawnX+5; x++) {
+                      if(newExp[y] && newExp[y][x] !== undefined) newExp[y][x] = 1;
+                  }
+              }
+
+              return {
+                  ...prev,
+                  playerPos: { x: 30, y: 25 }, // Safe spawn in center of new map
+                  currentMapId: 'map_10_10',
+                  exploration: {
+                      ...prev.exploration,
+                      'map_10_10': newExp
+                  },
+                  logs: [...prev.logs, { id: uid(), message: "World Updated: Map Layout Reset", type: 'INFO', timestamp: Date.now() }]
+              };
+          }
+          return prev;
+      });
+  }, []);
+
+  // 2. Cleanup Combat Numbers
+  useEffect(() => {
+      if (Object.keys(combatNumbers).length > 0) {
+          const t = setTimeout(() => setCombatNumbers({}), 1500);
+          return () => clearTimeout(t);
+      }
+  }, [combatNumbers]);
+
+  // 3. AI Tick (World Liveliness)
+  useEffect(() => {
+      const interval = setInterval(() => {
+          setGameState(prev => {
+              if (prev.stats.hp <= 0 || activeModal) return prev; // Pause logic
+
+              const map = MAPS[prev.currentMapId];
+              if (!map) return prev;
+
+              // Process Spawners & Enemies
+              let nextEntities = processSpawners(map, map.entities); 
+              
+              const aiRes = processEnemyTurn(prev, { ...map, entities: nextEntities });
+              
+              // Apply updates back to mutable map (for renderer)
+              MAPS[prev.currentMapId].entities = aiRes.updatedEntities;
+
+              // Only update state if meaningful changes (damage or logs) to prevent render thrashing
+              if (aiRes.damageToPlayer > 0 || aiRes.logs.length > 0) {
+                  const newStats = { ...prev.stats };
+                  newStats.hp -= aiRes.damageToPlayer;
+                  
+                  if (aiRes.damageToPlayer > 0) {
+                      setCombatNumbers(c => ({ ...c, 'player': (c['player']||0) + aiRes.damageToPlayer }));
+                  }
+
+                  if (newStats.hp <= 0) setActiveModal('DEATH');
+
+                  return {
+                      ...prev,
+                      stats: newStats,
+                      logs: [...prev.logs, ...aiRes.logs].slice(-50),
+                      animations: { ...prev.animations, ...aiRes.animations },
+                      counters: { ...prev.counters, damage_taken: (prev.counters.damage_taken || 0) + aiRes.damageToPlayer }
+                  };
+              }
+              
+              // If AI moved but no damage, we still might want to trigger render?
+              // The time tick below usually handles this, or movement triggers re-render via player.
+              // For smoother enemies, we force a re-render if enemies exist
+              if (nextEntities.some(e => e.type === 'ENEMY')) {
+                  return { ...prev }; // Force update
+              }
+
+              return prev;
+          });
+      }, 1000); // 1s Tick
+      return () => clearInterval(interval);
+  }, [activeModal]);
+
+  // --- NEW INTEGRATION END ---
 
   const handleOpenModal = (modalName: string | null) => {
       setActiveModal(modalName);
@@ -599,6 +695,7 @@ export default function App() {
                       setActiveDialogue({ title: 'Sign', messages: entity.destination?.name ? [`To ${entity.destination.name}`] : ['A weather-worn sign.'] });
                       newCounters.lore_read = (newCounters.lore_read || 0) + 1;
                   } 
+                  else if (entity.subType === 'LOCKED_DOOR') setActivePuzzle({ id: entity.id, type: 'KEYPAD', content: 'ENTER SECURITY CODE', solution: '1234' });
                   else if (entity.subType === 'CHEST') {
                       playSound('UI_CLICK');
                       const lootId = entity.loot || 'potion_small';
@@ -625,7 +722,7 @@ export default function App() {
               counters: newCounters, 
               activeQuest: newActiveQuest, 
               stats: newStats, 
-              skills: newSkills,
+              skills: newSkills, 
               completedQuestIds,
               lastCombatTime: newCombatTime,
               bestiary: newBestiary,
